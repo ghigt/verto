@@ -100,8 +100,17 @@ final class PanelController: NSObject, NSWindowDelegate {
         let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
 
         if event.keyCode == 53 { // esc
-            if vm.isStreaming { vm.cancel() } else { hide() }
+            if vm.isStreaming { vm.cancel() } else if vm.showingHistory { vm.toggleHistory() } else { hide() }
             return true
+        }
+        if vm.showingHistory {
+            switch (event.keyCode, flags.contains(.command)) {
+            case (126, false): vm.moveHistorySelection(-1); return true      // ↑
+            case (125, false): vm.moveHistorySelection(1); return true       // ↓
+            case (36, true), (76, true): vm.copyHistorySelection(); return true  // ⌘⏎
+            case (51, true): vm.deleteHistorySelection(); return true        // ⌘⌫
+            default: break
+            }
         }
         // ⌥1…⌥9 : ajustements prédéfinis (keyCode pour marcher en AZERTY).
         if flags == .option, vm.hasConversation, !vm.result.isEmpty, let index = Self.digitKeyCodes.firstIndex(of: event.keyCode) {
@@ -124,6 +133,8 @@ final class PanelController: NSObject, NSWindowDelegate {
             vm.cancel(); return true
         case "n":
             vm.reset(); focusInput(); return true
+        case "y":
+            vm.toggleHistory(); return true
         case "q":
             NSApp.terminate(nil); return true
         case "w":

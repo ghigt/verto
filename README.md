@@ -28,7 +28,8 @@ Pour le lancer à l'ouverture de session : Réglages Système → Général → 
 | `⌘⏎` ou `⌘C` | copier le résultat et fermer |
 | `⌘.` | stopper la génération |
 | `⌘N` | nouvelle conversation |
-| `esc` | fermer (la conversation est conservée jusqu'à la copie) |
+| `⌘Y` | historique : le champ devient une recherche, `↑↓` naviguer, `⏎` rouvrir (pour ré-ajuster), `⌘⏎` copier, `⌘⌫` supprimer |
+| `esc` | fermer (la conversation est conservée jusqu'à la copie) ; dans l'historique : retour |
 
 ## Config
 
@@ -40,6 +41,7 @@ Pour le lancer à l'ouverture de session : Réglages Système → Général → 
 - `hotkey` : ex. `option+space`, `ctrl+option+t`, `cmd+shift+space`
 - `prefillFromClipboard` : pré-remplir le champ avec le presse-papiers
 - `actions` : liste `{ "name", "prompt" }` — `prompt` vide = le texte saisi sert de prompt (« Libre »). Le texte est envoyé entre balises `<text>` pour que le modèle ne réponde pas à une question qu'il contiendrait.
+- `historyLimit` : nombre de conversations gardées (défaut 200, `0` = désactivé). Stockées en clair dans `~/.config/verto/history.json`.
 - `adjustments` : préréglages d'ajustement `{ "name", "prompt" }`
 - `temperature` : 0.1 par défaut (plus haut = plus varié mais moins fidèle)
 

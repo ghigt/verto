@@ -16,6 +16,14 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var originalText: String?
     private var messages: [ChatMessage] = []
     private var task: Task<Void, Never>?
+    private var conversationID: UUID?
+
+    let history: HistoryStore
+    @Published private(set) var showingHistory = false
+    @Published private(set) var historySelection = 0
+    /// Saisie en cours mise de côté pendant que le champ sert de recherche.
+    private var stashedInput = ""
+
     /// Dernier ajustement tapé à la main, remis dans le champ en cas d'échec.
     private var typedAdjustment: String?
 
@@ -37,6 +45,7 @@ final class ChatViewModel: ObservableObject {
         self.config = config
         self.selectedAction = min(UserDefaults.standard.integer(forKey: Self.actionKey), config.actions.count - 1)
         self.modelName = config.model
+        self.history = HistoryStore(limit: config.historyLimit)
     }
 
     var action: Action { config.actions[selectedAction] }
@@ -47,11 +56,13 @@ final class ChatViewModel: ObservableObject {
         self.config = config
         modelName = config.model
         selectedAction = min(selectedAction, config.actions.count - 1)
+        history.limit = config.historyLimit
     }
 
     // MARK: - Actions
 
     func submit() {
+        if showingHistory { openHistorySelection(); return }
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isStreaming else { return }
         input = ""
@@ -93,8 +104,11 @@ final class ChatViewModel: ObservableObject {
 
     func reset() {
         cancel()
+        showingHistory = false
+        stashedInput = ""
         messages = []
         originalText = nil
+        conversationID = nil
         result = ""
         error = nil
         input = ""
@@ -136,6 +150,7 @@ final class ChatViewModel: ObservableObject {
 
     private func start(with text: String) {
         originalText = text
+        conversationID = UUID()
         messages = []
         if !action.prompt.isEmpty {
             messages.append(ChatMessage(role: "system", content: action.prompt + Self.outputRule))
@@ -192,7 +207,77 @@ final class ChatViewModel: ObservableObject {
             rollbackLastUserMessage()
         } else {
             messages.append(ChatMessage(role: "assistant", content: text))
+            saveToHistory()
         }
+    }
+
+    // MARK: - Historique
+
+    var historyResults: [HistoryEntry] { history.search(input) }
+
+    private func saveToHistory() {
+        guard let id = conversationID, let original = originalText else { return }
+        history.upsert(HistoryEntry(id: id, date: Date(), action: action.name,
+                                    original: original, result: result, messages: messages))
+    }
+
+    func toggleHistory() {
+        if showingHistory {
+            showingHistory = false
+            input = stashedInput
+        } else {
+            guard !isStreaming else { return }
+            stashedInput = input
+            input = ""
+            historySelection = 0
+            showingHistory = true
+        }
+    }
+
+    func moveHistorySelection(_ delta: Int) {
+        let count = historyResults.count
+        guard count > 0 else { return }
+        historySelection = min(max(historySelection + delta, 0), count - 1)
+    }
+
+    /// Recalé à chaque frappe dans la recherche.
+    func historyQueryChanged() {
+        historySelection = 0
+    }
+
+    private var selectedHistoryEntry: HistoryEntry? {
+        let results = historyResults
+        return results.indices.contains(historySelection) ? results[historySelection] : nil
+    }
+
+    /// Rouvre la conversation pour pouvoir continuer à l'ajuster.
+    func openHistorySelection() {
+        guard let entry = selectedHistoryEntry else { return }
+        cancel()
+        showingHistory = false
+        stashedInput = ""
+        input = ""
+        error = nil
+        conversationID = entry.id
+        originalText = entry.original
+        messages = entry.messages
+        result = entry.result
+        if let index = config.actions.firstIndex(where: { $0.name == entry.action }) {
+            selectedAction = index
+        }
+    }
+
+    func copyHistorySelection() {
+        guard selectedHistoryEntry != nil else { return }
+        openHistorySelection()
+        copyResult()
+    }
+
+    func deleteHistorySelection() {
+        guard let entry = selectedHistoryEntry else { return }
+        history.delete(entry.id)
+        objectWillChange.send()
+        historySelection = min(historySelection, max(historyResults.count - 1, 0))
     }
 
     private func fail(_ error: Error) {

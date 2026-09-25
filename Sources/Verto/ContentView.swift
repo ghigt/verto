@@ -13,7 +13,10 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             input
-            if !vm.result.isEmpty || vm.isStreaming {
+            if vm.showingHistory {
+                Divider().opacity(0.5)
+                historyView
+            } else if !vm.result.isEmpty || vm.isStreaming {
                 Divider().opacity(0.5)
                 if let original = vm.originalText {
                     Text(original)
@@ -58,6 +61,15 @@ struct ContentView: View {
                 }
             }
             Spacer(minLength: 8)
+            Button(action: vm.toggleHistory) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 13))
+                    .foregroundStyle(vm.showingHistory ? Color.accentColor : Color.secondary)
+                    .padding(4)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Historique (⌘Y)")
             if !vm.modelName.isEmpty {
                 Text(vm.modelName)
                     .font(.system(size: 10, design: .monospaced))
@@ -104,7 +116,7 @@ struct ContentView: View {
     private var input: some View {
         ZStack(alignment: .topLeading) {
             if vm.input.isEmpty {
-                Text(vm.hasConversation ? "Ajustement… (ex : plus formel, plus court)" : "Colle ou tape ton texte…")
+                Text(placeholder)
                     .font(.system(size: 16))
                     .foregroundStyle(.tertiary)
                     .padding(.top, 4)
@@ -113,7 +125,77 @@ struct ContentView: View {
             InputTextView(text: $vm.input, height: $inputHeight, onSubmit: vm.submit)
                 .frame(height: inputHeight)
         }
+        .onChange(of: vm.input) {
+            if vm.showingHistory { vm.historyQueryChanged() }
+        }
     }
+
+    private var placeholder: String {
+        if vm.showingHistory { return "Rechercher dans l'historique…" }
+        return vm.hasConversation ? "Ajustement… (ex : plus formel, plus court)" : "Colle ou tape ton texte…"
+    }
+
+    private var historyView: some View {
+        let entries = vm.historyResults
+        return Group {
+            if entries.isEmpty {
+                Text(vm.history.entries.isEmpty ? "Historique vide" : "Aucun résultat")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                                historyRow(entry, selected: index == vm.historySelection)
+                                    .id(entry.id)
+                                    .onTapGesture(count: 2) { vm.openHistorySelection() }
+                                    .onTapGesture { vm.moveHistorySelection(index - vm.historySelection) }
+                            }
+                        }
+                    }
+                    .frame(height: min(CGFloat(entries.count) * 62, maxResultHeight))
+                    .onChange(of: vm.historySelection) {
+                        let results = vm.historyResults
+                        if results.indices.contains(vm.historySelection) {
+                            proxy.scrollTo(results[vm.historySelection].id)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func historyRow(_ entry: HistoryEntry, selected: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(entry.result)
+                .font(.system(size: 13))
+                .lineLimit(2)
+            HStack(spacing: 6) {
+                Text(entry.original)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 8)
+                Text("\(entry.action) · \(Self.relativeDate.localizedString(for: entry.date, relativeTo: Date()))")
+                    .fixedSize()
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Color.accentColor.opacity(0.2) : Color.clear))
+        .contentShape(Rectangle())
+    }
+
+    private static let relativeDate: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.unitsStyle = .short
+        return f
+    }()
 
     private var resultView: some View {
         ScrollViewReader { proxy in
@@ -155,7 +237,12 @@ struct ContentView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            if vm.isStreaming {
+            if vm.showingHistory {
+                hint("↑↓", "naviguer")
+                hint("⏎", "rouvrir")
+                hint("⌘⏎", "copier")
+                hint("⌘⌫", "supprimer")
+            } else if vm.isStreaming {
                 ProgressView().controlSize(.mini)
                 hint("⌘.", "stop")
             } else if vm.copied {
@@ -172,7 +259,10 @@ struct ContentView: View {
                 hint("⇧⏎", "nouvelle ligne")
             }
             Spacer()
-            hint("esc", "fermer")
+            if !vm.showingHistory && !vm.isStreaming {
+                hint("⌘Y", "historique")
+            }
+            hint("esc", vm.showingHistory ? "retour" : "fermer")
         }
         .font(.system(size: 11))
         .foregroundStyle(.secondary)

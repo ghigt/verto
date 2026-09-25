@@ -16,6 +16,8 @@ struct Config: Codable {
     var hotkey = "option+space"
     /// Pré-remplit le champ avec le contenu du presse-papiers à l'ouverture.
     var prefillFromClipboard = false
+    /// Nombre de conversations gardées dans l'historique (0 = désactivé).
+    var historyLimit = 200
     var actions: [Action] = Config.defaultActions
     /// Boutons d'ajustement proposés après un résultat (⌥1…⌥9).
     var adjustments: [Action] = Config.defaultAdjustments
@@ -75,6 +77,7 @@ struct Config: Codable {
         temperature = try c.decodeIfPresent(Double.self, forKey: .temperature)
         hotkey = try c.decodeIfPresent(String.self, forKey: .hotkey) ?? d.hotkey
         prefillFromClipboard = try c.decodeIfPresent(Bool.self, forKey: .prefillFromClipboard) ?? d.prefillFromClipboard
+        historyLimit = try c.decodeIfPresent(Int.self, forKey: .historyLimit) ?? d.historyLimit
         let actions = try c.decodeIfPresent([Action].self, forKey: .actions) ?? []
         self.actions = actions.isEmpty ? d.actions : actions
         adjustments = try c.decodeIfPresent([Action].self, forKey: .adjustments) ?? d.adjustments
@@ -115,6 +118,7 @@ struct Config: Codable {
           "temperature": 0.1,
           "hotkey": "\(d.hotkey)",
           "prefillFromClipboard": false,
+          "historyLimit": \(d.historyLimit),
           "actions": [
         \(list(d.actions))
           ],
