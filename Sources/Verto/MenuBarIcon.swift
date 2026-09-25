@@ -6,7 +6,7 @@ enum MenuBarIcon {
     static func make() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
             NSColor.black.set()
-            drawGlyph()
+            drawGlyph(.menuBar)
             return true
         }
         image.isTemplate = true
@@ -14,35 +14,60 @@ enum MenuBarIcon {
         return image
     }
 
-    /// Dessine le pictogramme dans la couleur courante, sur une grille 18×18 (y vers le bas).
-    static func drawGlyph() {
+    /// Géométrie du pictogramme sur une grille 18×18 (y vers le bas).
+    struct Geometry {
+        var left, top, right, bottom, cornerRadius: CGFloat
+        /// Fin du trait haut / début du trait droit, de part et d'autre de l'échancrure.
+        var gapTopEnd, gapRightStart: CGFloat
+        /// Lignes de texte : départ commun, puis (y, fin) pour chacune.
+        var textStart: CGFloat
+        var lines: [(y: CGFloat, end: CGFloat)]
+        var sparkleCenter: NSPoint
+        var sparkleRadius, sparklePlumpness: CGFloat
+
+        /// Icône d'app : dessinée en grand, aucune contrainte de pixel.
+        static let large = Geometry(left: 2, top: 3, right: 16, bottom: 15, cornerRadius: 3,
+                                    gapTopEnd: 10.5, gapRightStart: 8.5,
+                                    textStart: 5, lines: [(7.5, 10), (10.5, 11.5)],
+                                    sparkleCenter: NSPoint(x: 14.8, y: 3.2), sparkleRadius: 3, sparklePlumpness: 0.14)
+
+        /// Barre de menus : mêmes proportions, centrée dans les 18 pt et calée sur les pixels Retina
+        /// (traits de 1,5 pt centrés sur des multiples de 0,25 pt), étoile un peu plus pleine pour rester lisible.
+        static let menuBar = Geometry(left: 1.75, top: 4.25, right: 15.25, bottom: 15.75, cornerRadius: 3,
+                                      gapTopEnd: 9.5, gapRightStart: 9,
+                                      textStart: 4.75, lines: [(8.25, 9.25), (11.25, 10.75)],
+                                      sparkleCenter: NSPoint(x: 14.25, y: 4.25), sparkleRadius: 3, sparklePlumpness: 0.2)
+    }
+
+    /// Dessine le pictogramme dans la couleur courante.
+    static func drawGlyph(_ g: Geometry = .large) {
         let window = NSBezierPath()
         window.lineWidth = 1.5
         window.lineCapStyle = .round
         window.lineJoinStyle = .round
-        window.move(to: NSPoint(x: 10.5, y: 3))
-        window.line(to: NSPoint(x: 5, y: 3))
-        window.appendArc(from: NSPoint(x: 2, y: 3), to: NSPoint(x: 2, y: 6), radius: 3)
-        window.line(to: NSPoint(x: 2, y: 12))
-        window.appendArc(from: NSPoint(x: 2, y: 15), to: NSPoint(x: 5, y: 15), radius: 3)
-        window.line(to: NSPoint(x: 13, y: 15))
-        window.appendArc(from: NSPoint(x: 16, y: 15), to: NSPoint(x: 16, y: 12), radius: 3)
-        window.line(to: NSPoint(x: 16, y: 8.5))
+        window.move(to: NSPoint(x: g.gapTopEnd, y: g.top))
+        window.line(to: NSPoint(x: g.left + g.cornerRadius, y: g.top))
+        window.appendArc(from: NSPoint(x: g.left, y: g.top), to: NSPoint(x: g.left, y: g.top + g.cornerRadius), radius: g.cornerRadius)
+        window.line(to: NSPoint(x: g.left, y: g.bottom - g.cornerRadius))
+        window.appendArc(from: NSPoint(x: g.left, y: g.bottom), to: NSPoint(x: g.left + g.cornerRadius, y: g.bottom), radius: g.cornerRadius)
+        window.line(to: NSPoint(x: g.right - g.cornerRadius, y: g.bottom))
+        window.appendArc(from: NSPoint(x: g.right, y: g.bottom), to: NSPoint(x: g.right, y: g.bottom - g.cornerRadius), radius: g.cornerRadius)
+        window.line(to: NSPoint(x: g.right, y: g.gapRightStart))
         // Lignes de texte
-        window.move(to: NSPoint(x: 5, y: 7.5))
-        window.line(to: NSPoint(x: 10, y: 7.5))
-        window.move(to: NSPoint(x: 5, y: 10.5))
-        window.line(to: NSPoint(x: 11.5, y: 10.5))
+        for line in g.lines {
+            window.move(to: NSPoint(x: g.textStart, y: line.y))
+            window.line(to: NSPoint(x: line.end, y: line.y))
+        }
         window.stroke()
 
-        sparkle(center: NSPoint(x: 14.8, y: 3.2), radius: 3).fill()
+        sparkle(center: g.sparkleCenter, radius: g.sparkleRadius, plumpness: g.sparklePlumpness).fill()
     }
 
     /// Étincelle à 4 branches incurvées.
-    private static func sparkle(center c: NSPoint, radius r: CGFloat) -> NSBezierPath {
+    private static func sparkle(center c: NSPoint, radius r: CGFloat, plumpness: CGFloat) -> NSBezierPath {
         let tips = [NSPoint(x: c.x, y: c.y - r), NSPoint(x: c.x + r, y: c.y),
                     NSPoint(x: c.x, y: c.y + r), NSPoint(x: c.x - r, y: c.y)]
-        let k = r * 0.14
+        let k = r * plumpness
         let controls = [NSPoint(x: c.x + k, y: c.y - k), NSPoint(x: c.x + k, y: c.y + k),
                         NSPoint(x: c.x - k, y: c.y + k), NSPoint(x: c.x - k, y: c.y - k)]
         let path = NSBezierPath()
@@ -79,7 +104,7 @@ enum AppIcon {
             NSGraphicsContext.saveGraphicsState()
             transform.concat()
             NSColor.white.set()
-            MenuBarIcon.drawGlyph()
+            MenuBarIcon.drawGlyph(.large)
             NSGraphicsContext.restoreGraphicsState()
             return true
         }

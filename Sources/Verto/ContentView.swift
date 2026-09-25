@@ -33,6 +33,9 @@ struct ContentView: View {
                 }
                 resultView
                 if vm.adjusting {
+                    if !vm.translationTargets.isEmpty {
+                        languages
+                    }
                     if !vm.config.adjustments.isEmpty {
                         adjustments
                     }
@@ -104,6 +107,23 @@ struct ContentView: View {
             ForEach(Array(vm.config.adjustments.enumerated()), id: \.offset) { index, adjustment in
                 chip(adjustment.name, shortcut: nil, selected: vm.selectedPreset == index) {
                     vm.adjust(index)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .disabled(vm.isStreaming)
+        .opacity(vm.isStreaming ? 0.4 : 1)
+    }
+
+    /// Traduction : forcer une autre langue cible que celle choisie automatiquement.
+    private var languages: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "globe")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+            ForEach(vm.translationTargets, id: \.self) { code in
+                chip(ChatViewModel.displayName(code), shortcut: nil, selected: vm.selectedLanguage == code) {
+                    vm.translate(to: code)
                 }
             }
             Spacer(minLength: 0)

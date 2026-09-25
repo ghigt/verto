@@ -18,6 +18,10 @@ struct Version: Codable, Identifiable {
     var label: String
     /// Index du préréglage d'ajustement qui l'a produite (nil = défaut ou consigne libre).
     var preset: Int?
+    /// Langue cible, pour une traduction (nil sinon).
+    var language: String?
+    /// Produite par une consigne libre tapée à la main.
+    var custom: Bool? = nil
     /// Conversation ayant produit cette version (réponse incluse une fois terminée).
     var messages: [ChatMessage]
     var text: String

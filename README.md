@@ -45,6 +45,8 @@ Pour le lancer à l'ouverture de session : Réglages Système → Général → 
 - `hotkey` : ex. `option+space`, `ctrl+option+t`, `cmd+shift+space`
 - `prefillFromClipboard` : pré-remplir le champ avec le presse-papiers
 - `actions` : liste `{ "name", "prompt" }` — `prompt` vide = le texte saisi sert de prompt (« Libre »). Le texte est envoyé entre balises `<text>` pour que le modèle ne réponde pas à une question qu'il contiendrait.
+  - `languages` (optionnel), ex. `["fr", "en"]` : traduction automatique. La langue du texte est détectée par macOS ; un texte dans la 1re langue est traduit dans la 2e, tout le reste dans la 1re. `{target}` dans le prompt est remplacé par la langue cible. C'est le cas de l'action « Traduire » (FR ↔ EN).
+  - `targets` (optionnel) : langues proposées dans la zone d'ajustement (`tab`) pour forcer une autre cible, ex. `["en", "fr", "es", "de", "it", "pt"]`. Chaque langue devient une version, comparable sans regénérer ; les préréglages (Pro, Plus court…) s'appliquent à la langue affichée.
 - `historyLimit` : nombre de conversations gardées (défaut 200, `0` = désactivé). Stockées en clair dans `~/.config/verto/history.json`.
 - `adjustments` : préréglages d'ajustement `{ "name", "prompt" }`
 - `temperature` : 0.1 par défaut (plus haut = plus varié mais moins fidèle)

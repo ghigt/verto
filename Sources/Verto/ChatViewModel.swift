@@ -1,4 +1,5 @@
 import AppKit
+import NaturalLanguage
 import SwiftUI
 
 @MainActor
@@ -97,22 +98,28 @@ final class ChatViewModel: ObservableObject {
     /// Préréglage (ton, longueur…) appliqué au résultat par défaut.
     /// S'il a déjà été généré, on affiche simplement cette version.
     func adjust(_ index: Int) {
-        guard config.adjustments.indices.contains(index), let base = versions.first, !isStreaming else { return }
-        if let existing = versions.firstIndex(where: { $0.preset == index }) {
+        guard config.adjustments.indices.contains(index), !versions.isEmpty, !isStreaming else { return }
+        // Pour une traduction, le préréglage part de la traduction dans la langue affichée.
+        let language = selectedLanguage
+        let base = versions.first { $0.preset == nil && $0.language == language && $0.custom != true } ?? versions[0]
+        if let existing = versions.firstIndex(where: { $0.preset == index && $0.language == base.language }) {
             selectVersion(existing)
             return
         }
         typedAdjustment = nil
         let preset = config.adjustments[index]
-        run(label: preset.name, preset: index, request: base.messages + [adjustmentMessage(preset.prompt)])
+        let label = base.language != nil && base.id != versions[0].id ? "\(preset.name) · \(base.label)" : preset.name
+        run(label: label, preset: index, language: base.language,
+            request: base.messages + [adjustmentMessage(preset.prompt)])
     }
 
     /// Consigne libre, appliquée à la version affichée.
     private func sendAdjustment(_ request: String) {
         guard versions.indices.contains(selectedVersion) else { return }
         let label = request.count > 24 ? String(request.prefix(23)) + "…" : request
-        run(label: "« \(label) »", preset: nil,
-            request: versions[selectedVersion].messages + [adjustmentMessage(request)])
+        let current = versions[selectedVersion]
+        run(label: "« \(label) »", preset: nil, language: current.language, custom: true,
+            request: current.messages + [adjustmentMessage(request)])
     }
 
     private func adjustmentMessage(_ request: String) -> ChatMessage {
@@ -209,20 +216,108 @@ final class ChatViewModel: ObservableObject {
         conversationID = UUID()
         versions = []
         selectedVersion = 0
+        let direction = Self.translationDirection(action, for: text)
+        run(label: direction.map { Self.displayName($0.target) } ?? "Défaut", preset: nil,
+            language: direction?.target, request: initialRequest(for: text, direction: direction))
+    }
+
+    private func initialRequest(for text: String, direction: (source: String?, target: String)?) -> [ChatMessage] {
         var request: [ChatMessage] = []
         if !action.prompt.isEmpty {
-            request.append(ChatMessage(role: "system", content: action.prompt + Self.outputRule))
+            request.append(ChatMessage(role: "system", content: Self.resolvedPrompt(action, direction: direction) + Self.outputRule))
         }
-        request.append(ChatMessage(role: "user", content: action.prompt.isEmpty ? text : "<text>\n\(text)\n</text>"))
-        run(label: "Défaut", preset: nil, request: request)
+        request.append(ChatMessage(role: "user", content: Self.userMessage(action, for: text, direction: direction)))
+        return request
+    }
+
+    // MARK: - Traduction
+
+    /// Langues proposées pour forcer la cible (vide si l'action n'est pas une traduction).
+    var translationTargets: [String] {
+        guard action.languages != nil else { return [] }
+        let targets = action.targets ?? action.languages ?? []
+        // Sans la langue du texte d'origine : traduire vers elle-même n'a pas de sens.
+        guard let text = originalText, let source = Self.translationDirection(action, for: text)?.source else { return targets }
+        return targets.filter { !source.hasPrefix($0) }
+    }
+
+    /// Langue de la version affichée (pour la mettre en évidence).
+    var selectedLanguage: String? {
+        versions.indices.contains(selectedVersion) ? versions[selectedVersion].language : nil
+    }
+
+    /// Traduit le texte d'origine vers une autre langue que celle choisie automatiquement.
+    /// Si cette traduction existe déjà, on l'affiche sans regénérer.
+    func translate(to code: String) {
+        guard action.languages != nil, let text = originalText, !isStreaming else { return }
+        if let existing = versions.firstIndex(where: { $0.language == code && $0.preset == nil && $0.custom != true }) {
+            selectVersion(existing)
+            return
+        }
+        typedAdjustment = nil
+        let source = Self.translationDirection(action, for: text)?.source
+        run(label: Self.displayName(code), preset: nil, language: code,
+            request: initialRequest(for: text, direction: (source, code)))
+    }
+
+    /// Nom de langue affiché, ex. « Anglais ».
+    static func displayName(_ code: String) -> String {
+        let fr = Locale(identifier: "fr_FR")
+        return fr.localizedString(forLanguageCode: code)?.capitalized(with: fr) ?? code
+    }
+
+    /// Langues source et cible d'une traduction automatique (nil si l'action n'en est pas une).
+    private static func translationDirection(_ action: Action, for text: String) -> (source: String?, target: String)? {
+        guard let pair = action.languages, let first = pair.first else { return nil }
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(text)
+        var detected = recognizer.dominantLanguage?.rawValue
+        let confidence = detected.flatMap { recognizer.languageHypotheses(withMaximum: 1)[NLLanguage($0)] } ?? 0
+        // Texte court ou détection incertaine hors de la paire (ex. « ok merci » → italien) : on départage dans la paire.
+        if detected.map({ lang in !pair.contains { lang.hasPrefix($0) } }) ?? true, text.count < 40 || confidence < 0.6 {
+            recognizer.reset()
+            recognizer.languageConstraints = pair.map { NLLanguage($0) }
+            recognizer.processString(text)
+            detected = recognizer.dominantLanguage?.rawValue
+        }
+        guard let detected, let index = pair.firstIndex(where: { detected.hasPrefix($0) }) else {
+            return (detected, first)
+        }
+        return (detected, pair[index == 0 ? min(1, pair.count - 1) : 0])
+    }
+
+    private static func languageName(_ code: String) -> String {
+        Locale(identifier: "en").localizedString(forLanguageCode: code) ?? code
+    }
+
+    /// Prompt système, avec `{target}` remplacé et la direction rappelée explicitement pour les petits modèles.
+    private static func resolvedPrompt(_ action: Action, direction: (source: String?, target: String)?) -> String {
+        guard let direction else { return action.prompt }
+        let target = languageName(direction.target)
+        var prompt = action.prompt.replacingOccurrences(of: "{target}", with: target)
+        if let source = direction.source {
+            prompt += "\nThe text is written in \(languageName(source)). Your output must be written entirely in \(target)."
+        }
+        return prompt
+    }
+
+    /// Message utilisateur : le texte entre balises, avec la langue cible rappelée juste à côté pour une traduction.
+    private static func userMessage(_ action: Action, for text: String, direction: (source: String?, target: String)?) -> String {
+        guard !action.prompt.isEmpty else { return text }
+        var message = "<text>\n\(text)\n</text>"
+        if let direction {
+            message += "\n\nTranslate into \(languageName(direction.target))."
+        }
+        return message
     }
 
     /// Génère une nouvelle version et l'affiche pendant le streaming.
-    private func run(label: String, preset: Int?, request: [ChatMessage]) {
+    private func run(label: String, preset: Int?, language: String? = nil, custom: Bool = false, request: [ChatMessage]) {
         error = nil
         isStreaming = true
         selectionBeforeRun = selectedVersion
-        let version = Version(id: UUID(), label: label, preset: preset, messages: request, text: "")
+        let version = Version(id: UUID(), label: label, preset: preset, language: language,
+                              custom: custom ? true : nil, messages: request, text: "")
         versions.append(version)
         selectedVersion = versions.count - 1
         result = ""
@@ -330,7 +425,7 @@ final class ChatViewModel: ObservableObject {
         adjusting = false
         conversationID = entry.id
         originalText = entry.original
-        versions = entry.versions ?? [Version(id: UUID(), label: "Défaut", preset: nil, messages: entry.messages, text: entry.result)]
+        versions = entry.versions ?? [Version(id: UUID(), label: "Défaut", preset: nil, language: nil, messages: entry.messages, text: entry.result)]
         selectedVersion = min(entry.selectedVersion ?? 0, versions.count - 1)
         result = versions[selectedVersion].text
         if let index = config.actions.firstIndex(where: { $0.name == entry.action }) {
