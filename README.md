@@ -1,56 +1,88 @@
 # Verto
 
-Petite fenêtre flottante (façon Spotlight) pour réécrire, traduire ou corriger du texte avec un LLM local.
+*Lire en [français](README.fr.md).*
 
-Mode par défaut **Réécrire** : reformule ton texte (souvent un anglais approximatif) en un texte bien tourné, dans la même langue, sans rien ajouter ni retirer. Ensuite, comme le « Ajuster » de Copilot dans Teams, des préréglages en un clic (Pro, Détendu, Confiant, Enthousiaste, Plus court, Plus long) ou une consigne libre. Chaque résultat est gardé comme une version : on compare en basculant de l'une à l'autre sans rien regénérer. Les préréglages partent toujours de la version par défaut ; une consigne libre s'applique à la version affichée.
+A tiny Spotlight-style window for macOS that rewrites, translates or corrects text with a **local LLM**. Press a hotkey, paste, hit ⏎, copy.
 
-## Lancer
+![Verto rewriting a sentence](docs/rewrite.png)
+
+- **Rewrite** (default): turns clumsy text — typically non-native English — into well-phrased text, **in the same language**, adding and removing nothing.
+- **Translate**: detects the language (French → English, anything else → French by default), with any other target one keystroke away.
+- **Adjust**, like Copilot's *Adjust* in Microsoft Teams: more professional, casual, confident, enthusiastic, shorter, longer, or any instruction you type.
+- **Compare without regenerating**: every result is kept as a version; switch between them with ← →.
+- History, menu bar app (no Dock icon), keyboard-first, no dependencies.
+
+> The interface is currently in French.
+
+## Requirements
+
+- macOS 14 or later (developed and tested on Apple Silicon only).
+- Swift 5.10+ — the Xcode Command Line Tools are enough: `xcode-select --install`.
+- An OpenAI-compatible LLM server, for example:
+  - [Ollama](https://ollama.com): `ollama serve`, then e.g. `ollama pull llama3.1` (default endpoint `http://localhost:11434/v1`)
+  - [LM Studio](https://lmstudio.ai) (`http://localhost:1234/v1`), llama.cpp server…
+
+An 8B model such as `llama3.1` works; a larger one (e.g. `qwen2.5:14b`, `mistral-small`) gives noticeably better English.
+
+## Install
 
 ```sh
-./build.sh && open Verto.app   # app autonome (icône ✨ dans la barre de menus, pas de Dock)
-# ou, sans bundle :
-swift run -c release
+git clone https://github.com/ghigt/verto.git
+cd verto
+./build.sh && open Verto.app
 ```
 
-Pré-requis : un serveur OpenAI-compatible local, par ex. `ollama serve` (Ollama), LM Studio (`http://localhost:1234/v1`), llama.cpp server…
+`build.sh` compiles a release build and assembles `Verto.app`. You can move it to `/Applications`, and add it under *System Settings → General → Login Items* to start it at login. Alternatively, `swift run -c release` runs it without building the app bundle.
 
-L'icône de la barre de menus peut être masquée (menu → « Masquer l'icône… »). Pour la retrouver : `⌘,` dans la fenêtre → « Afficher l'icône… », ou relancer `Verto.app` (ce qui la réaffiche).
+Pre-built binaries are not provided: the app isn't signed or notarized, so macOS would block a downloaded copy. Building from source avoids that.
 
-Pour le lancer à l'ouverture de session : Réglages Système → Général → Ouverture → ajouter `Verto.app`.
+## Usage
 
-## Raccourcis
+Press **⌥Space**, paste or type your text, press **⏎**. Then:
 
-| Touche | Action |
+| Key | Action |
 |---|---|
-| `⌥Space` | ouvrir / fermer (configurable) |
-| `⌘1`…`⌘9` | choisir l'action (relance sur le texte d'origine si déjà traité) |
-| `⏎` / `⇧⏎` | envoyer / nouvelle ligne |
-| `⏎` sur un résultat | copier (idem `⌘⏎` / `⌘C`) ; la fenêtre reste ouverte |
-| `tab` sur un résultat | ouvrir la palette d'ajustement : tape « pro », « court », « esp »… une liste filtrée apparaît, `↑↓` pour choisir, `⏎` pour appliquer ; sans correspondance, `⏎` envoie ta saisie comme consigne libre. `✓` = déjà généré (affiché sans regénérer). `esc` pour masquer |
-| `⌥1`…`⌥9` | appliquer directement un préréglage d'ajustement |
-| `←` `→` | basculer entre les versions déjà générées (Défaut, Pro, Plus court…) sans regénérer |
-| `⌘.` | stopper la génération |
-| `⌘N` | nouvelle conversation |
-| `⌘Y` | historique : le champ devient une recherche, `↑↓` naviguer, `⏎` rouvrir (pour ré-ajuster), `⌘⏎` copier, `⌘⌫` supprimer |
-| `⌘,` ou `⋯` | menu de Verto : config, afficher/masquer l'icône de la barre de menus, quitter |
-| `esc` | fermer (la conversation est conservée jusqu'à `⌘N`) ; dans l'historique : retour |
+| `⏎` | copy the result (also `⌘⏎` / `⌘C`); the window stays open |
+| `tab` | open the adjust palette: type "pro", "court", "esp", "chin"…, pick with `↑↓`, apply with `⏎`; with no match, `⏎` sends what you typed as a free-form instruction. `✓` = already generated (shown instantly) |
+| `⌥1`…`⌥9` | apply an adjustment preset directly |
+| `←` `→` | switch between generated versions |
+| `⌘1`…`⌘9` | choose the action (Rewrite, Translate, Correct, Free); re-runs on the original text |
+| `⌘.` | stop generation |
+| `⌘N` | new conversation |
+| `⌘Y` | history: search, `↑↓`, `⏎` reopen, `⌘⏎` copy, `⌘⌫` delete |
+| `⌘,` or `⋯` | app menu: edit/reload config, show/hide menu bar icon, quit |
+| `esc` | close (the conversation is kept until `⌘N`) |
 
-## Config
+![Adjust palette](docs/palette.png)
 
-`~/.config/verto/config.json` (créé au premier lancement ; menu ✨ → « Éditer la config » puis « Recharger la config ») :
+The menu bar icon can be hidden from its menu. To bring it back: `⌘,` in the window → *Afficher l'icône…*, or simply open `Verto.app` again.
 
-- `baseURL` : endpoint OpenAI-compatible (défaut Ollama `http://localhost:11434/v1`)
-- `model` : vide = premier modèle listé par le serveur
-- `apiKey`, `temperature`
-- `hotkey` : ex. `option+space`, `ctrl+option+t`, `cmd+shift+space`
-- `prefillFromClipboard` : pré-remplir le champ avec le presse-papiers
-- `actions` : liste `{ "name", "prompt" }` — `prompt` vide = le texte saisi sert de prompt (« Libre »). Le texte est envoyé entre balises `<text>` pour que le modèle ne réponde pas à une question qu'il contiendrait.
-  - `languages` (optionnel), ex. `["fr", "en"]` : traduction automatique. La langue du texte est détectée par macOS ; un texte dans la 1re langue est traduit dans la 2e, tout le reste dans la 1re. `{target}` dans le prompt est remplacé par la langue cible. C'est le cas de l'action « Traduire » (FR ↔ EN).
-  - `targets` (optionnel) : langues proposées dans la palette d'ajustement (`tab`, puis taper « esp », « allemand »…) pour forcer une autre cible, ex. `["en", "fr", "es", "de", "it", "pt"]` — proposées en premier ; toute autre langue connue de macOS est trouvée en tapant son nom (« chin », « en japonais », « into Korean »). Chaque langue devient une version, comparable sans regénérer ; les préréglages (Pro, Plus court…) s'appliquent à la langue affichée.
-- `historyLimit` : nombre de conversations gardées (défaut 200, `0` = désactivé). Stockées en clair dans `~/.config/verto/history.json`.
-- `adjustments` : préréglages d'ajustement `{ "name", "prompt" }`
-- `temperature` : 0.1 par défaut (plus haut = plus varié mais moins fidèle)
+> On a French keyboard, `⌥Space` types a non-breaking space; change `hotkey` if you use it.
 
-Avec un modèle 8B (llama3.1) le résultat est correct ; un modèle plus gros (ex. `qwen2.5:14b`, `mistral-small`) sera nettement meilleur en anglais.
+## Configuration
 
-> Note : `⌥Space` sert à taper l'espace insécable sur clavier français ; change `hotkey` si tu l'utilises.
+`~/.config/verto/config.json` is created on first launch (menu → *Éditer la config*, then *Recharger la config*).
+
+| Key | Description |
+|---|---|
+| `baseURL` | OpenAI-compatible endpoint (default: Ollama, `http://localhost:11434/v1`) |
+| `model` | model name; empty = first model listed by the server |
+| `apiKey` | sent as a Bearer token if set |
+| `temperature` | default `0.1` (higher = more varied, less faithful) |
+| `hotkey` | e.g. `option+space`, `ctrl+option+t`, `cmd+shift+space` |
+| `prefillFromClipboard` | prefill the input with the clipboard |
+| `historyLimit` | conversations kept (default `200`, `0` = disabled) |
+| `actions` | list of `{ "name", "prompt" }`; an empty prompt means your text is the prompt ("Libre"). Optional `languages` (e.g. `["fr", "en"]`) enables automatic translation direction, with `{target}` replaced in the prompt; optional `targets` lists the languages suggested first in the palette |
+| `adjustments` | adjustment presets `{ "name", "prompt" }` |
+
+The text is sent between `<text>` tags so the model rewrites a question instead of answering it.
+
+## Privacy
+
+- Your text is sent **only** to the server configured in `baseURL`. With a local server, nothing leaves your Mac; if you point it to a cloud API, your text goes there.
+- The history (`~/.config/verto/history.json`) and the `apiKey` (in `config.json`) are stored **in plain text** on your Mac. Set `historyLimit` to `0` to disable history.
+- No telemetry, no network access other than the LLM endpoint.
+
+## License
+
+[MIT](LICENSE)

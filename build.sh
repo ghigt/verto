@@ -18,7 +18,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key><string>Verto</string>
-    <key>CFBundleIdentifier</key><string>local.verto</string>
+    <key>CFBundleIdentifier</key><string>io.github.ghigt.verto</string>
     <key>CFBundleName</key><string>Verto</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
