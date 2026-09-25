@@ -33,13 +33,10 @@ struct ContentView: View {
                 }
                 resultView
                 if vm.adjusting {
-                    if !vm.translationTargets.isEmpty {
-                        languages
-                    }
-                    if !vm.config.adjustments.isEmpty {
-                        adjustments
-                    }
                     input
+                    if !vm.suggestions.isEmpty {
+                        suggestionList
+                    }
                 }
             }
             if let error = vm.error {
@@ -99,37 +96,49 @@ struct ContentView: View {
         }
     }
 
-    private var adjustments: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "slider.horizontal.3")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
-            ForEach(Array(vm.config.adjustments.enumerated()), id: \.offset) { index, adjustment in
-                chip(adjustment.name, shortcut: nil, selected: vm.selectedPreset == index) {
-                    vm.adjust(index)
+    /// Palette d'ajustement : préréglages et langues filtrés par la saisie, puis la consigne libre.
+    private var suggestionList: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(vm.suggestions.enumerated()), id: \.element) { index, suggestion in
+                let selected = index == vm.suggestionSelection
+                HStack(spacing: 8) {
+                    Image(systemName: icon(for: suggestion))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 14)
+                    Text(vm.title(of: suggestion))
+                        .font(.system(size: 13))
+                        .foregroundStyle(isCustom(suggestion) ? .secondary : .primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    if vm.isGenerated(suggestion) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .help("Déjà généré : affiché sans regénérer")
+                    }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Color.accentColor.opacity(0.22) : Color.clear))
+                .contentShape(Rectangle())
+                .onTapGesture { vm.applySuggestion(suggestion) }
             }
-            Spacer(minLength: 0)
         }
-        .disabled(vm.isStreaming)
-        .opacity(vm.isStreaming ? 0.4 : 1)
     }
 
-    /// Traduction : forcer une autre langue cible que celle choisie automatiquement.
-    private var languages: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "globe")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
-            ForEach(vm.translationTargets, id: \.self) { code in
-                chip(ChatViewModel.displayName(code), shortcut: nil, selected: vm.selectedLanguage == code) {
-                    vm.translate(to: code)
-                }
-            }
-            Spacer(minLength: 0)
+    private func icon(for suggestion: ChatViewModel.Suggestion) -> String {
+        switch suggestion {
+        case .preset: return "slider.horizontal.3"
+        case .language: return "globe"
+        case .custom: return "text.bubble"
         }
-        .disabled(vm.isStreaming)
-        .opacity(vm.isStreaming ? 0.4 : 1)
+    }
+
+    private func isCustom(_ suggestion: ChatViewModel.Suggestion) -> Bool {
+        if case .custom = suggestion { return true }
+        return false
     }
 
     /// Versions déjà générées : un clic (ou ←/→) les affiche sans regénérer.
@@ -194,7 +203,7 @@ struct ContentView: View {
 
     private var placeholder: String {
         if vm.showingHistory { return "Rechercher dans l'historique…" }
-        return vm.hasConversation ? "Ajustement… (ex : plus formel, plus court)" : "Colle ou tape ton texte…"
+        return vm.hasConversation ? "Ajuster : pro, plus court, espagnol… ou une consigne" : "Colle ou tape ton texte…"
     }
 
     private var historyView: some View {
@@ -310,13 +319,14 @@ struct ContentView: View {
             } else if vm.copied {
                 Label("Copié", systemImage: "checkmark").foregroundStyle(.green)
             } else if vm.adjusting {
-                hint("⏎", "ajuster")
-                hint("⌘⏎", "copier")
-                if vm.versions.count > 1 {
-                    hint("←→", "versions")
-                }
-                if !vm.config.adjustments.isEmpty {
-                    hint("⌥1…\(min(vm.config.adjustments.count, 9))", "préréglages")
+                if vm.suggestions.isEmpty {
+                    hint("⌘⏎", "copier")
+                    if vm.versions.count > 1 {
+                        hint("←→", "versions")
+                    }
+                } else {
+                    hint("⏎", "appliquer")
+                    hint("↑↓", "choisir")
                 }
             } else if !vm.result.isEmpty {
                 hint("⏎", "copier")

@@ -5,7 +5,9 @@ import SwiftUI
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published private(set) var config: Config
-    @Published var input = ""
+    @Published var input = "" {
+        didSet { if input != oldValue { suggestionSelection = 0 } }
+    }
     @Published private(set) var selectedAction: Int
     @Published private(set) var result = ""
     @Published private(set) var isStreaming = false
@@ -37,8 +39,6 @@ final class ChatViewModel: ObservableObject {
     /// Dernier ajustement tapé à la main, remis dans le champ en cas d'échec.
     private var typedAdjustment: String?
 
-    /// Appelé pour fermer le panneau (après une copie).
-    var onClose: (() -> Void)?
 
     private static let actionKey = "selectedAction"
     /// Ajouté à chaque prompt d'action pour éviter les préambules des petits modèles.
@@ -73,6 +73,13 @@ final class ChatViewModel: ObservableObject {
 
     func submit() {
         if showingHistory { openHistorySelection(); return }
+        if adjusting {
+            let list = suggestions
+            if let suggestion = list.indices.contains(suggestionSelection) ? list[suggestionSelection] : list.last {
+                applySuggestion(suggestion)
+            }
+            return
+        }
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isStreaming else { return }
         input = ""
@@ -99,10 +106,8 @@ final class ChatViewModel: ObservableObject {
     /// S'il a déjà été généré, on affiche simplement cette version.
     func adjust(_ index: Int) {
         guard config.adjustments.indices.contains(index), !versions.isEmpty, !isStreaming else { return }
-        // Pour une traduction, le préréglage part de la traduction dans la langue affichée.
-        let language = selectedLanguage
-        let base = versions.first { $0.preset == nil && $0.language == language && $0.custom != true } ?? versions[0]
-        if let existing = versions.firstIndex(where: { $0.preset == index && $0.language == base.language }) {
+        let base = presetBase
+        if let existing = existingPresetVersion(index) {
             selectVersion(existing)
             return
         }
@@ -111,6 +116,116 @@ final class ChatViewModel: ObservableObject {
         let label = base.language != nil && base.id != versions[0].id ? "\(preset.name) · \(base.label)" : preset.name
         run(label: label, preset: index, language: base.language,
             request: base.messages + [adjustmentMessage(preset.prompt)])
+    }
+
+    /// Version de départ des préréglages : pour une traduction, la traduction dans la langue affichée.
+    private var presetBase: Version {
+        let language = selectedLanguage
+        return versions.first { $0.preset == nil && $0.language == language && $0.custom != true } ?? versions[0]
+    }
+
+    private func existingPresetVersion(_ index: Int) -> Int? {
+        guard !versions.isEmpty else { return nil }
+        let language = presetBase.language
+        return versions.firstIndex { $0.preset == index && $0.language == language }
+    }
+
+    private func existingLanguageVersion(_ code: String) -> Int? {
+        versions.firstIndex { $0.language == code && $0.preset == nil && $0.custom != true }
+    }
+
+    // MARK: - Palette d'ajustement
+
+    enum Suggestion: Hashable {
+        case preset(Int), language(String), custom(String)
+    }
+
+    @Published private(set) var suggestionSelection = 0
+
+    /// Préréglages et langues correspondant à la saisie, suivis de la saisie comme consigne libre.
+    var suggestions: [Suggestion] {
+        guard adjusting, !isStreaming else { return [] }
+        let query = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return [] }
+        let presets = config.adjustments.indices
+            .filter { Self.matches(query, [config.adjustments[$0].name]) }
+            .map { Suggestion.preset($0) }
+        return Array((presets + languageSuggestions(for: query)).prefix(4)) + [.custom(query)]
+    }
+
+    /// Pour une traduction : d'abord les langues de `targets`, puis n'importe quelle langue connue de macOS
+    /// (« chin » → Chinois). « en chinois », « into Japanese »… fonctionnent aussi.
+    private func languageSuggestions(for query: String) -> [Suggestion] {
+        let preferred = translationTargets
+        guard action.languages != nil else { return [] }
+        let name = Self.stripLanguagePrefix(query)
+        guard !name.isEmpty else { return [] }
+        let source = originalText.flatMap { Self.translationDirection(action, for: $0)?.source }
+        let first = preferred.filter { Self.matches(name, [Self.displayName($0), Self.languageName($0)]) || $0 == name.lowercased() }
+        // Autres langues : correspondance en début de nom seulement, à partir de 2 lettres, pour éviter le bruit.
+        let others = name.count < 2 ? [] : Self.allLanguageCodes.filter { code in
+            !preferred.contains(code) && !(source?.hasPrefix(code) ?? false)
+                && (Self.startsWith(name, Self.displayName(code)) || Self.startsWith(name, Self.languageName(code)) || code == name.lowercased())
+        }
+        return (first + others).map { Suggestion.language($0) }
+    }
+
+    /// Codes ISO 639-1 connus du système, triés par nom français.
+    private static let allLanguageCodes: [String] = Locale.LanguageCode.isoLanguageCodes
+        .map(\.identifier)
+        .filter { $0.count == 2 && Locale(identifier: "fr_FR").localizedString(forLanguageCode: $0) != nil }
+        .sorted { displayName($0).localizedCompare(displayName($1)) == .orderedAscending }
+
+    private static func stripLanguagePrefix(_ query: String) -> String {
+        let prefixes = ["traduire en ", "traduis en ", "translate into ", "translate to ", "en ", "vers ", "in ", "into ", "to "]
+        let lower = query.lowercased()
+        guard let prefix = prefixes.first(where: { lower.hasPrefix($0) }) else { return query }
+        return String(query.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func startsWith(_ query: String, _ name: String) -> Bool {
+        name.range(of: query, options: [.caseInsensitive, .diacriticInsensitive, .anchored]) != nil
+    }
+
+    func title(of suggestion: Suggestion) -> String {
+        switch suggestion {
+        case .preset(let i): return config.adjustments[i].name
+        case .language(let code): return Self.displayName(code)
+        case .custom(let text): return "« \(text) » comme consigne libre"
+        }
+    }
+
+    /// Déjà généré : l'appliquer affichera la version existante sans regénérer.
+    func isGenerated(_ suggestion: Suggestion) -> Bool {
+        switch suggestion {
+        case .preset(let i): return existingPresetVersion(i) != nil
+        case .language(let code): return existingLanguageVersion(code) != nil
+        case .custom: return false
+        }
+    }
+
+    func moveSuggestion(_ delta: Int) {
+        let count = suggestions.count
+        guard count > 0 else { return }
+        suggestionSelection = min(max(suggestionSelection + delta, 0), count - 1)
+    }
+
+    func applySuggestion(_ suggestion: Suggestion) {
+        guard !isStreaming else { return }
+        input = ""
+        switch suggestion {
+        case .preset(let i): adjust(i)
+        case .language(let code): translate(to: code)
+        case .custom(let text):
+            typedAdjustment = text
+            sendAdjustment(text)
+        }
+    }
+
+    /// Correspondance insensible à la casse et aux accents : la saisie est contenue dans l'un des noms.
+    private static func matches(_ query: String, _ candidates: [String]) -> Bool {
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        return candidates.contains { $0.range(of: query, options: options) != nil }
     }
 
     /// Consigne libre, appliquée à la version affichée.
@@ -184,11 +299,8 @@ final class ChatViewModel: ObservableObject {
         pb.clearContents()
         pb.setString(result.trimmingCharacters(in: .whitespacesAndNewlines), forType: .string)
         copied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
-            guard let self else { return }
-            self.copied = false
-            self.reset()
-            self.onClose?()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            self?.copied = false
         }
     }
 
@@ -250,7 +362,7 @@ final class ChatViewModel: ObservableObject {
     /// Si cette traduction existe déjà, on l'affiche sans regénérer.
     func translate(to code: String) {
         guard action.languages != nil, let text = originalText, !isStreaming else { return }
-        if let existing = versions.firstIndex(where: { $0.language == code && $0.preset == nil && $0.custom != true }) {
+        if let existing = existingLanguageVersion(code) {
             selectVersion(existing)
             return
         }

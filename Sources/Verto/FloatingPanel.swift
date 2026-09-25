@@ -48,7 +48,6 @@ final class PanelController: NSObject, NSWindowDelegate {
         hosting.view.layer?.backgroundColor = .clear
         panel.contentViewController = hosting
         panel.delegate = self
-        vm.onClose = { [weak self] in self?.hide() }
         vm.onFocusInput = { [weak self] in self?.focusInput() }
         vm.onShowMenu = { [weak self] in self?.showMenu() }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -127,6 +126,12 @@ final class PanelController: NSObject, NSWindowDelegate {
         if vm.hasConversation, !vm.adjusting, !vm.showingHistory, flags.subtracting(.function).isEmpty {
             if event.keyCode == 36 || event.keyCode == 76 { vm.copyResult(); return true }
             if event.keyCode == 48 { vm.showAdjust(); return true }
+        }
+        // Palette d'ajustement : ↑↓ parcourent les suggestions.
+        if vm.adjusting, !vm.suggestions.isEmpty, flags.subtracting([.function, .numericPad]).isEmpty,
+           event.keyCode == 126 || event.keyCode == 125 {
+            vm.moveSuggestion(event.keyCode == 126 ? -1 : 1)
+            return true
         }
         if vm.showingHistory {
             switch (event.keyCode, flags.contains(.command)) {

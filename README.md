@@ -25,15 +25,15 @@ Pour le lancer à l'ouverture de session : Réglages Système → Général → 
 | `⌥Space` | ouvrir / fermer (configurable) |
 | `⌘1`…`⌘9` | choisir l'action (relance sur le texte d'origine si déjà traité) |
 | `⏎` / `⇧⏎` | envoyer / nouvelle ligne |
-| `⏎` sur un résultat | copier et fermer (idem `⌘⏎` / `⌘C`) |
-| `tab` sur un résultat | afficher la zone d'ajustement (préréglages + consigne libre), `esc` pour la masquer |
+| `⏎` sur un résultat | copier (idem `⌘⏎` / `⌘C`) ; la fenêtre reste ouverte |
+| `tab` sur un résultat | ouvrir la palette d'ajustement : tape « pro », « court », « esp »… une liste filtrée apparaît, `↑↓` pour choisir, `⏎` pour appliquer ; sans correspondance, `⏎` envoie ta saisie comme consigne libre. `✓` = déjà généré (affiché sans regénérer). `esc` pour masquer |
 | `⌥1`…`⌥9` | appliquer directement un préréglage d'ajustement |
 | `←` `→` | basculer entre les versions déjà générées (Défaut, Pro, Plus court…) sans regénérer |
 | `⌘.` | stopper la génération |
 | `⌘N` | nouvelle conversation |
 | `⌘Y` | historique : le champ devient une recherche, `↑↓` naviguer, `⏎` rouvrir (pour ré-ajuster), `⌘⏎` copier, `⌘⌫` supprimer |
 | `⌘,` ou `⋯` | menu de Verto : config, afficher/masquer l'icône de la barre de menus, quitter |
-| `esc` | fermer (la conversation est conservée jusqu'à la copie) ; dans l'historique : retour |
+| `esc` | fermer (la conversation est conservée jusqu'à `⌘N`) ; dans l'historique : retour |
 
 ## Config
 
@@ -46,7 +46,7 @@ Pour le lancer à l'ouverture de session : Réglages Système → Général → 
 - `prefillFromClipboard` : pré-remplir le champ avec le presse-papiers
 - `actions` : liste `{ "name", "prompt" }` — `prompt` vide = le texte saisi sert de prompt (« Libre »). Le texte est envoyé entre balises `<text>` pour que le modèle ne réponde pas à une question qu'il contiendrait.
   - `languages` (optionnel), ex. `["fr", "en"]` : traduction automatique. La langue du texte est détectée par macOS ; un texte dans la 1re langue est traduit dans la 2e, tout le reste dans la 1re. `{target}` dans le prompt est remplacé par la langue cible. C'est le cas de l'action « Traduire » (FR ↔ EN).
-  - `targets` (optionnel) : langues proposées dans la zone d'ajustement (`tab`) pour forcer une autre cible, ex. `["en", "fr", "es", "de", "it", "pt"]`. Chaque langue devient une version, comparable sans regénérer ; les préréglages (Pro, Plus court…) s'appliquent à la langue affichée.
+  - `targets` (optionnel) : langues proposées dans la palette d'ajustement (`tab`, puis taper « esp », « allemand »…) pour forcer une autre cible, ex. `["en", "fr", "es", "de", "it", "pt"]` — proposées en premier ; toute autre langue connue de macOS est trouvée en tapant son nom (« chin », « en japonais », « into Korean »). Chaque langue devient une version, comparable sans regénérer ; les préréglages (Pro, Plus court…) s'appliquent à la langue affichée.
 - `historyLimit` : nombre de conversations gardées (défaut 200, `0` = désactivé). Stockées en clair dans `~/.config/verto/history.json`.
 - `adjustments` : préréglages d'ajustement `{ "name", "prompt" }`
 - `temperature` : 0.1 par défaut (plus haut = plus varié mais moins fidèle)
