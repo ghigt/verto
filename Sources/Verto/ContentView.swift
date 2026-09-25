@@ -12,7 +12,9 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
-            input
+            if !vm.hasConversation || vm.showingHistory {
+                input
+            }
             if vm.showingHistory {
                 Divider().opacity(0.5)
                 historyView
@@ -26,9 +28,15 @@ struct ContentView: View {
                         .truncationMode(.tail)
                         .help(original)
                 }
+                if vm.versions.count > 1 {
+                    versionTabs
+                }
                 resultView
-                if !vm.config.adjustments.isEmpty {
-                    adjustments
+                if vm.adjusting {
+                    if !vm.config.adjustments.isEmpty {
+                        adjustments
+                    }
+                    input
                 }
             }
             if let error = vm.error {
@@ -85,7 +93,7 @@ struct ContentView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
             ForEach(Array(vm.config.adjustments.enumerated()), id: \.offset) { index, adjustment in
-                chip(adjustment.name, shortcut: nil, selected: false) {
+                chip(adjustment.name, shortcut: nil, selected: vm.selectedPreset == index) {
                     vm.adjust(index)
                 }
             }
@@ -93,6 +101,31 @@ struct ContentView: View {
         }
         .disabled(vm.isStreaming)
         .opacity(vm.isStreaming ? 0.4 : 1)
+    }
+
+    /// Versions déjà générées : un clic (ou ←/→) les affiche sans regénérer.
+    private var versionTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 4) {
+                ForEach(Array(vm.versions.enumerated()), id: \.element.id) { index, version in
+                    Button { vm.selectVersion(index) } label: {
+                        Text(version.label)
+                            .font(.system(size: 11, weight: index == vm.selectedVersion ? .semibold : .regular))
+                            .foregroundStyle(index == vm.selectedVersion ? Color.primary : Color.secondary)
+                            .lineLimit(1)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(index == vm.selectedVersion ? Color.primary.opacity(0.12) : Color.clear)
+                            )
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(vm.isStreaming)
+                }
+            }
+        }
     }
 
     private func chip(_ title: String, shortcut: String?, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -247,22 +280,32 @@ struct ContentView: View {
                 hint("⌘.", "stop")
             } else if vm.copied {
                 Label("Copié", systemImage: "checkmark").foregroundStyle(.green)
-            } else if !vm.result.isEmpty {
-                hint("⌘⏎", "copier")
+            } else if vm.adjusting {
                 hint("⏎", "ajuster")
+                hint("⌘⏎", "copier")
+                if vm.versions.count > 1 {
+                    hint("←→", "versions")
+                }
                 if !vm.config.adjustments.isEmpty {
                     hint("⌥1…\(min(vm.config.adjustments.count, 9))", "préréglages")
                 }
+            } else if !vm.result.isEmpty {
+                hint("⏎", "copier")
+                if vm.versions.count > 1 {
+                    hint("←→", "versions")
+                }
+                Button(action: vm.showAdjust) { hint("tab", "ajuster") }
+                    .buttonStyle(.plain)
+                    .help("Ajuster le ton, la longueur…")
                 hint("⌘N", "nouveau")
             } else {
                 hint("⏎", "envoyer")
-                hint("⇧⏎", "nouvelle ligne")
             }
             Spacer()
             if !vm.showingHistory && !vm.isStreaming {
                 hint("⌘Y", "historique")
             }
-            hint("esc", vm.showingHistory ? "retour" : "fermer")
+            hint("esc", vm.showingHistory ? "retour" : vm.adjusting ? "masquer" : "fermer")
         }
         .font(.system(size: 11))
         .foregroundStyle(.secondary)

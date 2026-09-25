@@ -6,8 +6,21 @@ struct HistoryEntry: Codable, Identifiable {
     var action: String
     var original: String
     var result: String
-    /// Conversation complète, pour pouvoir la rouvrir et continuer à l'ajuster.
+    /// Conversation de la version retenue, pour pouvoir la rouvrir et continuer à l'ajuster.
     var messages: [ChatMessage]
+    /// Toutes les versions générées (absent dans les entrées plus anciennes).
+    var versions: [Version]?
+    var selectedVersion: Int?
+}
+
+struct Version: Codable, Identifiable {
+    let id: UUID
+    var label: String
+    /// Index du préréglage d'ajustement qui l'a produite (nil = défaut ou consigne libre).
+    var preset: Int?
+    /// Conversation ayant produit cette version (réponse incluse une fois terminée).
+    var messages: [ChatMessage]
+    var text: String
 }
 
 /// Historique local, stocké en clair dans ~/.config/verto/history.json.

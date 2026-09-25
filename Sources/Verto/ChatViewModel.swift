@@ -14,12 +14,19 @@ final class ChatViewModel: ObservableObject {
 
     /// Texte d'origine de la conversation en cours (nil = pas de conversation).
     @Published private(set) var originalText: String?
-    private var messages: [ChatMessage] = []
+    /// Versions générées pour ce texte (la première = résultat par défaut). On bascule entre elles sans regénérer.
+    @Published private(set) var versions: [Version] = []
+    @Published private(set) var selectedVersion = 0
+    private var selectionBeforeRun = 0
     private var task: Task<Void, Never>?
     private var conversationID: UUID?
 
     let history: HistoryStore
     @Published private(set) var showingHistory = false
+    /// Zone d'ajustement (préréglages + consigne libre), affichée seulement à la demande.
+    @Published private(set) var adjusting = false
+    /// Demande au panneau de donner le focus au champ de saisie.
+    var onFocusInput: (() -> Void)?
     @Published private(set) var historySelection = 0
     /// Saisie en cours mise de côté pendant que le champ sert de recherche.
     private var stashedInput = ""
@@ -85,16 +92,60 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    /// Applique un ajustement prédéfini (ton, longueur…) au dernier résultat.
+    /// Préréglage (ton, longueur…) appliqué au résultat par défaut.
+    /// S'il a déjà été généré, on affiche simplement cette version.
     func adjust(_ index: Int) {
-        guard config.adjustments.indices.contains(index), hasConversation, !isStreaming, !result.isEmpty else { return }
+        guard config.adjustments.indices.contains(index), let base = versions.first, !isStreaming else { return }
+        if let existing = versions.firstIndex(where: { $0.preset == index }) {
+            selectVersion(existing)
+            return
+        }
         typedAdjustment = nil
-        sendAdjustment(config.adjustments[index].prompt)
+        let preset = config.adjustments[index]
+        run(label: preset.name, preset: index, request: base.messages + [adjustmentMessage(preset.prompt)])
     }
 
+    /// Consigne libre, appliquée à la version affichée.
     private func sendAdjustment(_ request: String) {
-        messages.append(ChatMessage(role: "user", content: action.prompt.isEmpty ? request : Self.adjustment(request)))
-        run()
+        guard versions.indices.contains(selectedVersion) else { return }
+        let label = request.count > 24 ? String(request.prefix(23)) + "…" : request
+        run(label: "« \(label) »", preset: nil,
+            request: versions[selectedVersion].messages + [adjustmentMessage(request)])
+    }
+
+    private func adjustmentMessage(_ request: String) -> ChatMessage {
+        ChatMessage(role: "user", content: action.prompt.isEmpty ? request : Self.adjustment(request))
+    }
+
+    /// Préréglage correspondant à la version affichée (pour le mettre en évidence).
+    var selectedPreset: Int? {
+        versions.indices.contains(selectedVersion) ? versions[selectedVersion].preset : nil
+    }
+
+    func selectVersion(_ index: Int) {
+        guard versions.indices.contains(index), !isStreaming else { return }
+        selectedVersion = index
+        result = versions[index].text
+    }
+
+    func moveVersion(_ delta: Int) {
+        selectVersion(min(max(selectedVersion + delta, 0), versions.count - 1))
+    }
+
+    func showAdjust() {
+        guard hasConversation, !showingHistory else { return }
+        adjusting = true
+        focusInputSoon()
+    }
+
+    /// Le champ peut changer de place : on attend que SwiftUI l'ait (re)créé.
+    private func focusInputSoon() {
+        DispatchQueue.main.async { [weak self] in self?.onFocusInput?() }
+    }
+
+    func hideAdjust() {
+        adjusting = false
+        input = ""
     }
 
     func cancel() {
@@ -105,8 +156,10 @@ final class ChatViewModel: ObservableObject {
     func reset() {
         cancel()
         showingHistory = false
+        adjusting = false
         stashedInput = ""
-        messages = []
+        versions = []
+        selectedVersion = 0
         originalText = nil
         conversationID = nil
         result = ""
@@ -117,6 +170,7 @@ final class ChatViewModel: ObservableObject {
 
     func copyResult() {
         guard !result.isEmpty, !isStreaming else { return }
+        saveToHistory() // mémorise la version choisie
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(result.trimmingCharacters(in: .whitespacesAndNewlines), forType: .string)
@@ -151,35 +205,42 @@ final class ChatViewModel: ObservableObject {
     private func start(with text: String) {
         originalText = text
         conversationID = UUID()
-        messages = []
+        versions = []
+        selectedVersion = 0
+        var request: [ChatMessage] = []
         if !action.prompt.isEmpty {
-            messages.append(ChatMessage(role: "system", content: action.prompt + Self.outputRule))
+            request.append(ChatMessage(role: "system", content: action.prompt + Self.outputRule))
         }
-        messages.append(ChatMessage(role: "user", content: action.prompt.isEmpty ? text : "<text>\n\(text)\n</text>"))
-        run()
+        request.append(ChatMessage(role: "user", content: action.prompt.isEmpty ? text : "<text>\n\(text)\n</text>"))
+        run(label: "Défaut", preset: nil, request: request)
     }
 
-    private func run() {
+    /// Génère une nouvelle version et l'affiche pendant le streaming.
+    private func run(label: String, preset: Int?, request: [ChatMessage]) {
         error = nil
         isStreaming = true
+        selectionBeforeRun = selectedVersion
+        let version = Version(id: UUID(), label: label, preset: preset, messages: request, text: "")
+        versions.append(version)
+        selectedVersion = versions.count - 1
+        result = ""
         let config = self.config
-        let messages = self.messages
         task = Task { [weak self] in
             var acc = ""
             do {
                 if config.model.isEmpty, let model = try? await LLMClient.resolveModel(config) {
                     self?.modelName = model
                 }
-                for try await chunk in LLMClient.stream(config: config, messages: messages) {
+                for try await chunk in LLMClient.stream(config: config, messages: request) {
                     acc += chunk
                     self?.result = Self.clean(acc, streaming: true)
                 }
-                self?.finish(with: acc)
+                self?.finish(version.id, with: acc)
             } catch {
                 if Task.isCancelled || (error as? URLError)?.code == .cancelled || error is CancellationError {
-                    self?.finish(with: acc)
+                    self?.finish(version.id, with: acc)
                 } else {
-                    self?.fail(error)
+                    self?.fail(version.id, error)
                 }
             }
         }
@@ -199,16 +260,18 @@ final class ChatViewModel: ObservableObject {
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func finish(with raw: String) {
-        let text = Self.clean(raw)
-        if !text.isEmpty { result = text }
+    private func finish(_ id: UUID, with raw: String) {
         isStreaming = false
-        if text.isEmpty {
-            rollbackLastUserMessage()
-        } else {
-            messages.append(ChatMessage(role: "assistant", content: text))
-            saveToHistory()
+        let text = Self.clean(raw)
+        guard !text.isEmpty, let index = versions.firstIndex(where: { $0.id == id }) else {
+            discardVersion(id)
+            return
         }
+        versions[index].text = text
+        versions[index].messages.append(ChatMessage(role: "assistant", content: text))
+        if selectedVersion == index { result = text }
+        typedAdjustment = nil
+        saveToHistory()
     }
 
     // MARK: - Historique
@@ -216,9 +279,12 @@ final class ChatViewModel: ObservableObject {
     var historyResults: [HistoryEntry] { history.search(input) }
 
     private func saveToHistory() {
-        guard let id = conversationID, let original = originalText else { return }
-        history.upsert(HistoryEntry(id: id, date: Date(), action: action.name,
-                                    original: original, result: result, messages: messages))
+        guard let id = conversationID, let original = originalText,
+              versions.indices.contains(selectedVersion), !versions[selectedVersion].text.isEmpty else { return }
+        let current = versions[selectedVersion]
+        history.upsert(HistoryEntry(id: id, date: Date(), action: action.name, original: original,
+                                    result: current.text, messages: current.messages,
+                                    versions: versions.filter { !$0.text.isEmpty }, selectedVersion: selectedVersion))
     }
 
     func toggleHistory() {
@@ -232,6 +298,7 @@ final class ChatViewModel: ObservableObject {
             historySelection = 0
             showingHistory = true
         }
+        focusInputSoon()
     }
 
     func moveHistorySelection(_ delta: Int) {
@@ -258,10 +325,12 @@ final class ChatViewModel: ObservableObject {
         stashedInput = ""
         input = ""
         error = nil
+        adjusting = false
         conversationID = entry.id
         originalText = entry.original
-        messages = entry.messages
-        result = entry.result
+        versions = entry.versions ?? [Version(id: UUID(), label: "Défaut", preset: nil, messages: entry.messages, text: entry.result)]
+        selectedVersion = min(entry.selectedVersion ?? 0, versions.count - 1)
+        result = versions[selectedVersion].text
         if let index = config.actions.firstIndex(where: { $0.name == entry.action }) {
             selectedAction = index
         }
@@ -280,7 +349,7 @@ final class ChatViewModel: ObservableObject {
         historySelection = min(historySelection, max(historyResults.count - 1, 0))
     }
 
-    private func fail(_ error: Error) {
+    private func fail(_ id: UUID, _ error: Error) {
         isStreaming = false
         if let urlError = error as? URLError,
            [.cannotConnectToHost, .cannotFindHost, .networkConnectionLost, .timedOut].contains(urlError.code) {
@@ -288,19 +357,22 @@ final class ChatViewModel: ObservableObject {
         } else {
             self.error = error.localizedDescription
         }
-        rollbackLastUserMessage()
+        discardVersion(id)
     }
 
-    /// Remet le dernier message utilisateur dans le champ pour pouvoir réessayer.
-    private func rollbackLastUserMessage() {
-        guard messages.last?.role == "user" else { return }
-        messages.removeLast()
-        if !messages.contains(where: { $0.role == "assistant" }) {
+    /// Retire une version qui n'a rien produit et remet la saisie pour pouvoir réessayer.
+    private func discardVersion(_ id: UUID) {
+        versions.removeAll { $0.id == id }
+        if versions.isEmpty {
+            // Échec du premier appel : on revient à la saisie du texte.
             if input.isEmpty { input = originalText ?? "" }
-            messages = []
             originalText = nil
-        } else if input.isEmpty, let typed = typedAdjustment {
-            input = typed
+            conversationID = nil
+            focusInputSoon()
+        } else {
+            selectedVersion = min(selectionBeforeRun, versions.count - 1)
+            result = versions[selectedVersion].text
+            if input.isEmpty, let typed = typedAdjustment { input = typed }
         }
         typedAdjustment = nil
     }

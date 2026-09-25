@@ -2,7 +2,7 @@
 
 Petite fenêtre flottante (façon Spotlight) pour réécrire, traduire ou corriger du texte avec un LLM local.
 
-Mode par défaut **Réécrire** : reformule ton texte (souvent un anglais approximatif) en un texte bien tourné, dans la même langue, sans rien ajouter ni retirer. Ensuite, comme le « Ajuster » de Copilot dans Teams, des préréglages en un clic (Pro, Détendu, Confiant, Enthousiaste, Plus court, Plus long) ou une consigne libre.
+Mode par défaut **Réécrire** : reformule ton texte (souvent un anglais approximatif) en un texte bien tourné, dans la même langue, sans rien ajouter ni retirer. Ensuite, comme le « Ajuster » de Copilot dans Teams, des préréglages en un clic (Pro, Détendu, Confiant, Enthousiaste, Plus court, Plus long) ou une consigne libre. Chaque résultat est gardé comme une version : on compare en basculant de l'une à l'autre sans rien regénérer. Les préréglages partent toujours de la version par défaut ; une consigne libre s'applique à la version affichée.
 
 ## Lancer
 
@@ -23,9 +23,10 @@ Pour le lancer à l'ouverture de session : Réglages Système → Général → 
 | `⌥Space` | ouvrir / fermer (configurable) |
 | `⌘1`…`⌘9` | choisir l'action (relance sur le texte d'origine si déjà traité) |
 | `⏎` / `⇧⏎` | envoyer / nouvelle ligne |
-| `⏎` après un résultat | envoyer un ajustement libre (« plus formel », « ajoute un merci »…) |
-| `⌥1`…`⌥9` | appliquer un préréglage d'ajustement |
-| `⌘⏎` ou `⌘C` | copier le résultat et fermer |
+| `⏎` sur un résultat | copier et fermer (idem `⌘⏎` / `⌘C`) |
+| `tab` sur un résultat | afficher la zone d'ajustement (préréglages + consigne libre), `esc` pour la masquer |
+| `⌥1`…`⌥9` | appliquer directement un préréglage d'ajustement |
+| `←` `→` | basculer entre les versions déjà générées (Défaut, Pro, Plus court…) sans regénérer |
 | `⌘.` | stopper la génération |
 | `⌘N` | nouvelle conversation |
 | `⌘Y` | historique : le champ devient une recherche, `↑↓` naviguer, `⏎` rouvrir (pour ré-ajuster), `⌘⏎` copier, `⌘⌫` supprimer |

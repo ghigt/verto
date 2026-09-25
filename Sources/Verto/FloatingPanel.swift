@@ -47,6 +47,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.contentViewController = hosting
         panel.delegate = self
         vm.onClose = { [weak self] in self?.hide() }
+        vm.onFocusInput = { [weak self] in self?.focusInput() }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.window === self.panel else { return event }
             return self.handle(event) ? nil : event
@@ -100,8 +101,22 @@ final class PanelController: NSObject, NSWindowDelegate {
         let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
 
         if event.keyCode == 53 { // esc
-            if vm.isStreaming { vm.cancel() } else if vm.showingHistory { vm.toggleHistory() } else { hide() }
+            if vm.isStreaming { vm.cancel() }
+            else if vm.showingHistory { vm.toggleHistory() }
+            else if vm.adjusting { vm.hideAdjust(); panel.makeFirstResponder(nil) }
+            else { hide() }
             return true
+        }
+        // ←/→ : bascule entre les versions (si le champ d'ajustement n'est pas en cours d'édition).
+        if vm.hasConversation, !vm.showingHistory, vm.versions.count > 1, vm.input.isEmpty,
+           flags.subtracting([.function, .numericPad]).isEmpty, event.keyCode == 123 || event.keyCode == 124 {
+            vm.moveVersion(event.keyCode == 123 ? -1 : 1)
+            return true
+        }
+        // Résultat affiché sans zone d'ajustement : ⏎ copie, ⇥ ouvre l'ajustement.
+        if vm.hasConversation, !vm.adjusting, !vm.showingHistory, flags.subtracting(.function).isEmpty {
+            if event.keyCode == 36 || event.keyCode == 76 { vm.copyResult(); return true }
+            if event.keyCode == 48 { vm.showAdjust(); return true }
         }
         if vm.showingHistory {
             switch (event.keyCode, flags.contains(.command)) {
@@ -132,7 +147,9 @@ final class PanelController: NSObject, NSWindowDelegate {
         case ".":
             vm.cancel(); return true
         case "n":
-            vm.reset(); focusInput(); return true
+            vm.reset()
+            DispatchQueue.main.async { self.focusInput() }
+            return true
         case "y":
             vm.toggleHistory(); return true
         case "q":
