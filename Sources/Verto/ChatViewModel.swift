@@ -16,17 +16,21 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var originalText: String?
     private var messages: [ChatMessage] = []
     private var task: Task<Void, Never>?
+    /// Dernier ajustement tapé à la main, remis dans le champ en cas d'échec.
+    private var typedAdjustment: String?
 
     /// Appelé pour fermer le panneau (après une copie).
     var onClose: (() -> Void)?
 
     private static let actionKey = "selectedAction"
     /// Ajouté à chaque prompt d'action pour éviter les préambules des petits modèles.
+    /// En anglais pour ne pas influencer la langue de sortie.
     private static let outputRule = """
 
-    Règle stricte : réponds uniquement avec le texte final, prêt à être copié-collé. \
-    Aucune introduction (« Voici… »), aucune alternative, aucune explication, aucun guillemet autour. \
-    Si l'utilisateur demande ensuite un ajustement, applique-le et renvoie à nouveau uniquement le texte final complet.
+
+    Output only the final text, ready to paste: no preamble (such as "Here is…"), no alternatives, \
+    no explanations, no notes, no quotes or <text> tags around it.
+    When the user later asks for an adjustment, apply it to your last version and again output only the complete final text.
     """
 
     init(config: Config) {
@@ -51,9 +55,9 @@ final class ChatViewModel: ObservableObject {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !isStreaming else { return }
         input = ""
-        if let _ = originalText {
-            messages.append(ChatMessage(role: "user", content: action.prompt.isEmpty ? text : Self.adjustment(text)))
-            run()
+        if hasConversation {
+            typedAdjustment = text
+            sendAdjustment(text)
         } else {
             start(with: text)
         }
@@ -68,6 +72,18 @@ final class ChatViewModel: ObservableObject {
             cancel()
             start(with: text)
         }
+    }
+
+    /// Applique un ajustement prédéfini (ton, longueur…) au dernier résultat.
+    func adjust(_ index: Int) {
+        guard config.adjustments.indices.contains(index), hasConversation, !isStreaming, !result.isEmpty else { return }
+        typedAdjustment = nil
+        sendAdjustment(config.adjustments[index].prompt)
+    }
+
+    private func sendAdjustment(_ request: String) {
+        messages.append(ChatMessage(role: "user", content: action.prompt.isEmpty ? request : Self.adjustment(request)))
+        run()
     }
 
     func cancel() {
@@ -111,8 +127,10 @@ final class ChatViewModel: ObservableObject {
     /// (ex : « plus formel » ne doit pas faire changer la langue d'une traduction).
     private static func adjustment(_ request: String) -> String {
         """
-        Ajuste ta dernière réponse selon cette consigne : \(request)
-        Garde la même tâche et la même langue de sortie que ta dernière réponse. Renvoie uniquement le texte final complet.
+        Adjust your last version according to this instruction: \(request)
+        Keep the same task, the same language and the same meaning as your last version: \
+        do not add any new information, fact or idea that was not in the original text. \
+        Output only the complete final text.
         """
     }
 
@@ -122,7 +140,7 @@ final class ChatViewModel: ObservableObject {
         if !action.prompt.isEmpty {
             messages.append(ChatMessage(role: "system", content: action.prompt + Self.outputRule))
         }
-        messages.append(ChatMessage(role: "user", content: text))
+        messages.append(ChatMessage(role: "user", content: action.prompt.isEmpty ? text : "<text>\n\(text)\n</text>"))
         run()
     }
 
@@ -139,7 +157,7 @@ final class ChatViewModel: ObservableObject {
                 }
                 for try await chunk in LLMClient.stream(config: config, messages: messages) {
                     acc += chunk
-                    self?.result = acc
+                    self?.result = Self.clean(acc, streaming: true)
                 }
                 self?.finish(with: acc)
             } catch {
@@ -152,7 +170,23 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    private func finish(with text: String) {
+    /// Retire les balises <text> que les petits modèles recopient parfois autour de leur réponse.
+    private static func clean(_ raw: String, streaming: Bool = false) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let open = "<text>", close = "</text>"
+        if streaming, open.hasPrefix(text) { return "" }
+        if text.hasPrefix(open) { text.removeFirst(open.count) }
+        if text.hasSuffix(close) {
+            text.removeLast(close.count)
+        } else if streaming, let partial = (2..<close.count).reversed().first(where: { text.hasSuffix(close.prefix($0)) }) {
+            text.removeLast(partial)
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func finish(with raw: String) {
+        let text = Self.clean(raw)
+        if !text.isEmpty { result = text }
         isStreaming = false
         if text.isEmpty {
             rollbackLastUserMessage()
@@ -174,11 +208,15 @@ final class ChatViewModel: ObservableObject {
 
     /// Remet le dernier message utilisateur dans le champ pour pouvoir réessayer.
     private func rollbackLastUserMessage() {
-        guard messages.last?.role == "user", let last = messages.popLast() else { return }
-        if input.isEmpty { input = last.content }
+        guard messages.last?.role == "user" else { return }
+        messages.removeLast()
         if !messages.contains(where: { $0.role == "assistant" }) {
+            if input.isEmpty { input = originalText ?? "" }
             messages = []
             originalText = nil
+        } else if input.isEmpty, let typed = typedAdjustment {
+            input = typed
         }
+        typedAdjustment = nil
     }
 }

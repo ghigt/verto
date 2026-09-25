@@ -15,7 +15,18 @@ struct ContentView: View {
             input
             if !vm.result.isEmpty || vm.isStreaming {
                 Divider().opacity(0.5)
+                if let original = vm.originalText {
+                    Text(original)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .help(original)
+                }
                 resultView
+                if !vm.config.adjustments.isEmpty {
+                    adjustments
+                }
             }
             if let error = vm.error {
                 Text(error)
@@ -42,22 +53,9 @@ struct ContentView: View {
     private var header: some View {
         HStack(spacing: 6) {
             ForEach(Array(vm.config.actions.enumerated()), id: \.offset) { index, action in
-                Button { vm.selectAction(index) } label: {
-                    HStack(spacing: 4) {
-                        Text(action.name)
-                        if index < 9 {
-                            Text("⌘\(index + 1)").foregroundStyle(.secondary).font(.system(size: 10))
-                        }
-                    }
-                    .font(.system(size: 12, weight: index == vm.selectedAction ? .semibold : .regular))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule().fill(index == vm.selectedAction ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.06))
-                    )
-                    .contentShape(Capsule())
+                chip(action.name, shortcut: index < 9 ? "⌘\(index + 1)" : nil, selected: index == vm.selectedAction) {
+                    vm.selectAction(index)
                 }
-                .buttonStyle(.plain)
             }
             Spacer(minLength: 8)
             if !vm.modelName.isEmpty {
@@ -67,6 +65,40 @@ struct ContentView: View {
                     .lineLimit(1)
             }
         }
+    }
+
+    private var adjustments: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+            ForEach(Array(vm.config.adjustments.enumerated()), id: \.offset) { index, adjustment in
+                chip(adjustment.name, shortcut: nil, selected: false) {
+                    vm.adjust(index)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .disabled(vm.isStreaming)
+        .opacity(vm.isStreaming ? 0.4 : 1)
+    }
+
+    private func chip(_ title: String, shortcut: String?, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title)
+                if let shortcut {
+                    Text(shortcut).foregroundStyle(.secondary).font(.system(size: 10))
+                }
+            }
+            .font(.system(size: 12, weight: selected ? .semibold : .regular))
+            .lineLimit(1)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(selected ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.06)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var input: some View {
@@ -90,6 +122,7 @@ struct ContentView: View {
                     Text(vm.result.isEmpty ? " " : vm.result)
                         .font(.system(size: 15))
                         .textSelection(.enabled)
+                        .padding(.trailing, 34) // place pour le bouton copier
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Color.clear.frame(height: 1).id("bottom")
@@ -130,6 +163,9 @@ struct ContentView: View {
             } else if !vm.result.isEmpty {
                 hint("⌘⏎", "copier")
                 hint("⏎", "ajuster")
+                if !vm.config.adjustments.isEmpty {
+                    hint("⌥1…\(min(vm.config.adjustments.count, 9))", "préréglages")
+                }
                 hint("⌘N", "nouveau")
             } else {
                 hint("⏎", "envoyer")

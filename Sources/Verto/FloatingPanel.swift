@@ -93,12 +93,19 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     // MARK: - Raccourcis internes
 
+    private static let digitKeyCodes: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
+
     private func handle(_ event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
 
         if event.keyCode == 53 { // esc
             if vm.isStreaming { vm.cancel() } else { hide() }
+            return true
+        }
+        // ⌥1…⌥9 : ajustements prédéfinis (keyCode pour marcher en AZERTY).
+        if flags == .option, vm.hasConversation, !vm.result.isEmpty, let index = Self.digitKeyCodes.firstIndex(of: event.keyCode) {
+            vm.adjust(index)
             return true
         }
         guard flags.contains(.command) else { return false }
@@ -108,8 +115,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             return true
         }
         // ⌘1…⌘9 : utilise le keyCode pour fonctionner aussi en AZERTY.
-        let digitKeyCodes: [UInt16] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
-        if let index = digitKeyCodes.firstIndex(of: event.keyCode) {
+        if let index = Self.digitKeyCodes.firstIndex(of: event.keyCode) {
             vm.selectAction(index)
             return true
         }
