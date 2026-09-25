@@ -27,6 +27,8 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var adjusting = false
     /// Demande au panneau de donner le focus au champ de saisie.
     var onFocusInput: (() -> Void)?
+    /// Ouvre le menu de l'app (config, icône de barre de menus, quitter).
+    var onShowMenu: (() -> Void)?
     @Published private(set) var historySelection = 0
     /// Saisie en cours mise de côté pendant que le champ sert de recherche.
     private var stashedInput = ""

@@ -14,6 +14,8 @@ swift run -c release
 
 Pré-requis : un serveur OpenAI-compatible local, par ex. `ollama serve` (Ollama), LM Studio (`http://localhost:1234/v1`), llama.cpp server…
 
+L'icône de la barre de menus peut être masquée (menu → « Masquer l'icône… »). Pour la retrouver : `⌘,` dans la fenêtre → « Afficher l'icône… », ou relancer `Verto.app` (ce qui la réaffiche).
+
 Pour le lancer à l'ouverture de session : Réglages Système → Général → Ouverture → ajouter `Verto.app`.
 
 ## Raccourcis
@@ -30,6 +32,7 @@ Pour le lancer à l'ouverture de session : Réglages Système → Général → 
 | `⌘.` | stopper la génération |
 | `⌘N` | nouvelle conversation |
 | `⌘Y` | historique : le champ devient une recherche, `↑↓` naviguer, `⏎` rouvrir (pour ré-ajuster), `⌘⏎` copier, `⌘⌫` supprimer |
+| `⌘,` ou `⋯` | menu de Verto : config, afficher/masquer l'icône de la barre de menus, quitter |
 | `esc` | fermer (la conversation est conservée jusqu'à la copie) ; dans l'historique : retour |
 
 ## Config

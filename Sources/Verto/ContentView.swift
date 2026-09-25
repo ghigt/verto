@@ -78,6 +78,15 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .help("Historique (⌘Y)")
+            Button { vm.onShowMenu?() } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Menu (⌘,)")
             if !vm.modelName.isEmpty {
                 Text(vm.modelName)
                     .font(.system(size: 10, design: .monospaced))

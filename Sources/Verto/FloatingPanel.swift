@@ -36,6 +36,8 @@ final class PanelController: NSObject, NSWindowDelegate {
     let panel = FloatingPanel()
     let vm: ChatViewModel
     private var keyMonitor: Any?
+    /// Affiche le menu de l'app (le même que celui de la barre de menus) à un point de la fenêtre.
+    var onShowMenu: ((NSView, NSPoint) -> Void)?
 
     init(vm: ChatViewModel) {
         self.vm = vm
@@ -48,6 +50,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.delegate = self
         vm.onClose = { [weak self] in self?.hide() }
         vm.onFocusInput = { [weak self] in self?.focusInput() }
+        vm.onShowMenu = { [weak self] in self?.showMenu() }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.window === self.panel else { return event }
             return self.handle(event) ? nil : event
@@ -77,6 +80,13 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.orderOut(nil)
         // Rend le focus à l'application précédente.
         NSApp.hide(nil)
+    }
+
+    func showMenu() {
+        guard let view = panel.contentView else { return }
+        // Coin haut droit (la vue d'hébergement SwiftUI n'est pas retournée : y vers le haut).
+        let point = NSPoint(x: view.bounds.maxX - 16, y: view.isFlipped ? 16 : view.bounds.maxY - 16)
+        onShowMenu?(view, point)
     }
 
     private func focusInput() {
@@ -152,6 +162,8 @@ final class PanelController: NSObject, NSWindowDelegate {
             return true
         case "y":
             vm.toggleHistory(); return true
+        case ",":
+            showMenu(); return true
         case "q":
             NSApp.terminate(nil); return true
         case "w":
