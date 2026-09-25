@@ -1,7 +1,5 @@
 # Verto
 
-*Lire en [français](README.fr.md).*
-
 A tiny Spotlight-style window for macOS that rewrites, translates or corrects text with a **local LLM**. Press a hotkey, paste, hit ⏎, copy.
 
 ![Verto rewriting a sentence](docs/rewrite.png)
@@ -53,7 +51,13 @@ Press **⌥Space**, paste or type your text, press **⏎**. Then:
 | `⌘,` or `⋯` | app menu: edit/reload config, show/hide menu bar icon, quit |
 | `esc` | close (the conversation is kept until `⌘N`) |
 
-![Adjust palette](docs/palette.png)
+**Translate, then pick another language in the adjust palette (`tab`):**
+
+![Translating, with the adjust palette open](docs/translate.png)
+
+**History (`⌘Y`):**
+
+![History](docs/history.png)
 
 The menu bar icon can be hidden from its menu. To bring it back: `⌘,` in the window → *Afficher l'icône…*, or simply open `Verto.app` again.
 
