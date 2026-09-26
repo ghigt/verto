@@ -3,8 +3,9 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var vm: ChatViewModel
-    @State private var inputHeight: CGFloat = 24
-    @State private var resultHeight: CGFloat = 0
+    /// Hauteurs mesurées. Pas de `@State` : c'est une macro dans les SDK récents, et certaines
+    /// installations des Command Line Tools n'ont pas le plugin `SwiftUIMacros` (build impossible).
+    @ObservedObject var layout: LayoutState
 
     private let width: CGFloat = 640
     private let maxResultHeight: CGFloat = 380
@@ -193,8 +194,8 @@ struct ContentView: View {
                     .padding(.top, 4)
                     .allowsHitTesting(false)
             }
-            InputTextView(text: $vm.input, height: $inputHeight, onSubmit: vm.submit)
-                .frame(height: inputHeight)
+            InputTextView(text: $vm.input, height: $layout.inputHeight, onSubmit: vm.submit)
+                .frame(height: layout.inputHeight)
         }
         .onChange(of: vm.input) {
             if vm.showingHistory { vm.historyQueryChanged() }
@@ -285,8 +286,8 @@ struct ContentView: View {
                 })
             }
             .scrollIndicators(.automatic)
-            .frame(height: min(max(resultHeight, 20), maxResultHeight))
-            .onPreferenceChange(HeightKey.self) { resultHeight = $0 }
+            .frame(height: min(max(layout.resultHeight, 20), maxResultHeight))
+            .onPreferenceChange(HeightKey.self) { layout.resultHeight = $0 }
             .onChange(of: vm.result) {
                 if vm.isStreaming { proxy.scrollTo("bottom", anchor: .bottom) }
             }
@@ -356,6 +357,11 @@ struct ContentView: View {
             Text(label).foregroundStyle(.tertiary)
         }
     }
+}
+
+final class LayoutState: ObservableObject {
+    @Published var inputHeight: CGFloat = 24
+    @Published var resultHeight: CGFloat = 0
 }
 
 private struct HeightKey: PreferenceKey {

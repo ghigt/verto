@@ -42,7 +42,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     init(vm: ChatViewModel) {
         self.vm = vm
         super.init()
-        let hosting = NSHostingController(rootView: ContentView(vm: vm))
+        let hosting = NSHostingController(rootView: ContentView(vm: vm, layout: LayoutState()))
         hosting.sizingOptions = [.preferredContentSize]
         hosting.view.wantsLayer = true
         hosting.view.layer?.backgroundColor = .clear

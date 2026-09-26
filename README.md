@@ -30,7 +30,7 @@ cd verto
 ./build.sh && open Verto.app
 ```
 
-`build.sh` compiles a release build and assembles `Verto.app`. You can move it to `/Applications`, and add it under *System Settings → General → Login Items* to start it at login. Alternatively, `swift run -c release` runs it without building the app bundle.
+`build.sh` compiles with `swiftc` directly (no SwiftPM needed, no admin rights) and assembles `Verto.app`. You can move it to `/Applications`, and add it under *System Settings → General → Login Items* to start it at login. Alternatively, `swift run -c release` runs it without building the app bundle.
 
 Pre-built binaries are not provided: the app isn't signed or notarized, so macOS would block a downloaded copy. Building from source avoids that.
 

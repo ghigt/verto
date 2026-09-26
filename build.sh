@@ -1,15 +1,21 @@
 #!/bin/sh
 # Compile en release et assemble Verto.app (app de barre de menus, sans icône Dock).
+# Appelle swiftc directement plutôt que `swift build` : pas de dépendance, et ça fonctionne
+# même quand SwiftPM est cassé (Command Line Tools partiellement mis à jour).
 set -e
 cd "$(dirname "$0")"
-swift build -c release
+BIN=.build/manual/Verto
+mkdir -p "$(dirname "$BIN")"
+swiftc -O -swift-version 5 -module-name Verto \
+    -target "$(uname -m)-apple-macos14.0" \
+    Sources/Verto/*.swift -o "$BIN"
 APP=Verto.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
-cp .build/release/Verto "$APP/Contents/MacOS/Verto"
+cp "$BIN" "$APP/Contents/MacOS/Verto"
 mkdir -p "$APP/Contents/Resources"
 ICONSET="$(mktemp -d)/AppIcon.iconset"
-.build/release/Verto --export-iconset "$ICONSET"
+"$BIN" --export-iconset "$ICONSET"
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$(dirname "$ICONSET")"
 cat > "$APP/Contents/Info.plist" <<PLIST
