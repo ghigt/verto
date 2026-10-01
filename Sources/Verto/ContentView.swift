@@ -273,8 +273,13 @@ struct ContentView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(vm.result.isEmpty ? " " : vm.result)
-                        .font(.system(size: 15))
+                    Group {
+                        if vm.result.isEmpty {
+                            Text(" ").font(.system(size: 15))
+                        } else {
+                            MarkdownView(text: vm.result, fontSize: 15)
+                        }
+                    }
                         .textSelection(.enabled)
                         .padding(.trailing, 34) // place pour le bouton copier
                         .frame(maxWidth: .infinity, alignment: .leading)

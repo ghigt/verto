@@ -8,6 +8,7 @@ A tiny Spotlight-style window for macOS that rewrites, translates or corrects te
 - **Translate**: detects the language (French → English, anything else → French by default), with any other target one keystroke away.
 - **Adjust**, like Copilot's *Adjust* in Microsoft Teams: more professional, casual, confident, enthusiastic, shorter, longer, or any instruction you type.
 - **Compare without regenerating**: every result is kept as a version; switch between them with ← →.
+- **Markdown rendering** of results (headings, lists, quotes, tables, inline styles) with **syntax-highlighted code blocks** for ~20 languages.
 - History, menu bar app (no Dock icon), keyboard-first, no dependencies.
 
 > The interface is currently in French.
