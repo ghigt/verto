@@ -50,14 +50,21 @@ enum LLMClient {
     static func resolveModel(_ config: Config) async throws -> String {
         if !config.model.isEmpty { return config.model }
         if let cached = cachedModel, cached.baseURL == config.baseURL { return cached.model }
+        guard let id = try await listModels(config).first else { throw LLMError.noModel }
+        cachedModel = (config.baseURL, id)
+        return id
+    }
+
+    /// Modèles listés par `GET {baseURL}/models`.
+    static func listModels(_ config: Config) async throws -> [String] {
         struct Models: Decodable { struct M: Decodable { let id: String }; let data: [M] }
-        let (data, response) = try await URLSession.shared.data(for: request(try endpoint(config, "/models"), config))
+        var req = request(try endpoint(config, "/models"), config)
+        req.timeoutInterval = 10
+        let (data, response) = try await URLSession.shared.data(for: req)
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             throw LLMError.http(http.statusCode, String(decoding: data, as: UTF8.self))
         }
-        guard let id = try JSONDecoder().decode(Models.self, from: data).data.first?.id else { throw LLMError.noModel }
-        cachedModel = (config.baseURL, id)
-        return id
+        return try JSONDecoder().decode(Models.self, from: data).data.map(\.id)
     }
 
     /// Stream des fragments de texte de `POST /chat/completions` (SSE).

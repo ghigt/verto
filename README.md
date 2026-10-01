@@ -49,7 +49,7 @@ Press **⌥Space**, paste or type your text, press **⏎**. Then:
 | `⌘.` | stop generation |
 | `⌘N` | new conversation |
 | `⌘Y` | history: search, `↑↓`, `⏎` reopen, `⌘⏎` copy, `⌘⌫` delete |
-| `⌘,` or `⋯` | app menu: edit/reload config, show/hide menu bar icon, quit |
+| `⌘,` or `⋯` | app menu: settings, reload config, show/hide menu bar icon, quit |
 | `esc` | close (the conversation is kept until `⌘N`) |
 
 **Translate, then pick another language in the adjust palette (`tab`):**
@@ -66,7 +66,9 @@ The menu bar icon can be hidden from its menu. To bring it back: `⌘,` in the w
 
 ## Configuration
 
-`~/.config/verto/config.json` is created on first launch (menu → *Éditer la config*, then *Recharger la config*).
+Open the menu (`⌘,` or the menu bar icon) → *Réglages…* to edit everything in a window: server, model (with a list fetched from the server), temperature, hotkey, history, and the actions and adjustment presets (add, remove, reorder, edit prompts). *Enregistrer* (`⌘S`) saves and applies immediately.
+
+The settings are stored in `~/.config/verto/config.json`, created on first launch. You can also edit it by hand (*Ouvrir config.json* in the settings window), then use *Recharger la config* in the menu.
 
 | Key | Description |
 |---|---|

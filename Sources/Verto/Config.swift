@@ -100,38 +100,50 @@ struct Config: Codable {
         }
     }
 
-    /// Écrit à la main pour garder un ordre de clés lisible.
+    /// Enregistre la config dans `config.json` (remplace le fichier).
+    func save() throws {
+        try FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
+        try json.write(to: Self.fileURL, atomically: true, encoding: .utf8)
+    }
+
     private static var defaultJSON: String {
-        func esc(_ s: String) -> String {
-            s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-                .replacingOccurrences(of: "\n", with: "\\n")
+        var config = Config()
+        config.temperature = 0.1
+        return config.json
+    }
+
+    /// Écrit à la main pour garder un ordre de clés lisible.
+    var json: String {
+        func str(_ s: String) -> String {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .withoutEscapingSlashes
+            return (try? encoder.encode(s)).map { String(decoding: $0, as: UTF8.self) } ?? "\"\""
         }
-        let d = Config()
         func list(_ actions: [Action]) -> String {
             actions
                 .map { action in
                     func codes(_ key: String, _ list: [String]?) -> String {
-                        list.map { ", \"\(key)\": [" + $0.map { "\"\($0)\"" }.joined(separator: ", ") + "]" } ?? ""
+                        list.map { ", \"\(key)\": [" + $0.map(str).joined(separator: ", ") + "]" } ?? ""
                     }
-                    return "    { \"name\": \"\(esc(action.name))\", \"prompt\": \"\(esc(action.prompt))\""
+                    return "    { \"name\": \(str(action.name)), \"prompt\": \(str(action.prompt))"
                         + codes("languages", action.languages) + codes("targets", action.targets) + " }"
                 }
                 .joined(separator: ",\n")
         }
         return """
         {
-          "baseURL": "\(d.baseURL)",
-          "apiKey": "",
-          "model": "",
-          "temperature": 0.1,
-          "hotkey": "\(d.hotkey)",
-          "prefillFromClipboard": false,
-          "historyLimit": \(d.historyLimit),
+          "baseURL": \(str(baseURL)),
+          "apiKey": \(str(apiKey)),
+          "model": \(str(model)),
+          "temperature": \(temperature.map { "\($0)" } ?? "null"),
+          "hotkey": \(str(hotkey)),
+          "prefillFromClipboard": \(prefillFromClipboard),
+          "historyLimit": \(historyLimit),
           "actions": [
-        \(list(d.actions))
+        \(list(actions))
           ],
           "adjustments": [
-        \(list(d.adjustments))
+        \(list(adjustments))
           ]
         }
 

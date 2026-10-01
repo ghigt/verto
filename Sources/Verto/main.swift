@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var panel: PanelController!
     private var vm: ChatViewModel!
     private let hotKey = HotKey()
+    private let settings = SettingsWindowController()
     private var statusItem: NSStatusItem!
     private let menu = NSMenu()
     private var toggleIconItem: NSMenuItem!
@@ -25,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         HotKey.onPress = { [weak self] in self?.panel.toggle() }
         registerHotKey()
         setupMenus()
+        settings.model.onSave = { [weak self] config in self?.apply(config: config, error: nil) }
     }
 
     /// Relancer Verto.app alors qu'il tourne déjà : ouvre la fenêtre et réaffiche l'icône si elle était masquée.
@@ -50,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         menu.addItem(withTitle: "Ouvrir", action: #selector(openPanel), keyEquivalent: "").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Éditer la config…", action: #selector(editConfig), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Réglages…", action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Recharger la config", action: #selector(reloadConfig), keyEquivalent: "").target = self
         menu.addItem(.separator())
         toggleIconItem = menu.addItem(withTitle: "", action: #selector(toggleIcon), keyEquivalent: "")
@@ -77,6 +79,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = edit
         main.addItem(editItem)
+        // ⌘W ferme la fenêtre de réglages (le panneau gère ses propres raccourcis).
+        let windowItem = NSMenuItem()
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowItem.submenu = window
+        main.addItem(windowItem)
         NSApp.mainMenu = main
     }
 
@@ -110,15 +118,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.isVisible = !hidden
     }
 
-    @objc private func editConfig() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-t", Config.fileURL.path]
-        try? process.run()
-    }
+    @objc private func openSettings() { settings.show() }
 
     @objc private func reloadConfig() {
         let (config, error) = Config.load()
+        apply(config: config, error: error)
+    }
+
+    private func apply(config: Config, error: String?) {
         vm.apply(config: config)
         vm.error = error
         registerHotKey()
